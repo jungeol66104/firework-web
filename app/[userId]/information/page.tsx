@@ -244,12 +244,12 @@ export default function Page() {
             </div>
 
             {/* Optional Fields in Accordion */}
-            <Accordion type="single" collapsible className="w-full">
+            <Accordion type="single" collapsible className="w-full mt-4">
               <AccordionItem value="optional-fields" className="border-t border-b">
                 <AccordionTrigger className="text-lg font-semibold cursor-pointer">
                   선택 항목
                 </AccordionTrigger>
-                <AccordionContent className="!overflow-visible !overflow-y-hidden">
+                <AccordionContent className="!overflow-visible !overflow-y-hidden !overflow-x-visible">
                   <div className="space-y-4 pt-4">
                     <FormField
                       control={form.control}
@@ -291,25 +291,28 @@ export default function Page() {
               </AccordionItem>
             </Accordion>
 
-            <div className="flex justify-end gap-3 pt-6">
-              <Button
-                type="submit"
-                disabled={isSubmitting}
-                className="px-8 py-2"
-              >
-                {isSubmitting ? "저장 중..." : "저장"}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="px-8 py-2"
-                onClick={() => {
-                  // Navigate to questions page
-                  window.location.href = `/${userId}/questions`
-                }}
-              >
-                질문으로 이동
-              </Button>
+            <div className="flex justify-between items-center pt-6">
+              <div></div>
+              <div className="flex gap-3">
+                <Button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="px-8 py-2"
+                >
+                  {isSubmitting ? "저장 중..." : "저장"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="px-8 py-2"
+                  onClick={() => {
+                    // Navigate to questions page
+                    window.location.href = `/${userId}/questions`
+                  }}
+                >
+                  질문으로 이동
+                </Button>
+              </div>
             </div>
           </form>
         </Form>
