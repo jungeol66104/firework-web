@@ -18,7 +18,7 @@ const createColumns = (router: any): ColumnDef<DataItem>[] => [
   },
   {
     accessorKey: "interaction",
-    header: () => <div>상호작용 링크</div>,
+    header: () => <div>상호작용 링크 (ID)</div>,
     cell: ({ row }) => (
         <div>
             <button className="w-[140px] text-blue-600 hover:text-blue-800 underline cursor-pointer" onClick={() => router.push(`/${row.original.id}/interaction`)}>{row.original.id}</button>

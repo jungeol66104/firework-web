@@ -1,0 +1,13 @@
+{
+    "mcpServers": {
+        "firework-postgres": {
+            "command": "uv",
+            "args": [
+                "--directory",
+                "/Users/joonnam/Workspace/firework-mcp/firework-postgres",
+                "run",
+                "firework_postgres.py"
+            ]
+        }
+    }
+}

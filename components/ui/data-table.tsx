@@ -12,6 +12,7 @@ import { sampleData } from "@/lib/constants"
 import { useRouter } from "next/navigation"
 import createColumns from "@/components/columns"
 import createTestColumns from "@/components/testColumns"
+import { CreateInterviewButton } from "@/components/createInterviewButton"
 
 const data: DataItem[] = sampleData
 
@@ -25,7 +26,9 @@ export function DataTable() {
     <div className="w-full">
       <div className="flex items-center py-4">
         <Input placeholder="이름으로 검색..." className="max-w-sm" />
-        <Button variant="outline" className="ml-auto" onClick={() => console.log("Create interview")}>새 면접 생성</Button>
+        <div className="ml-auto">
+          <CreateInterviewButton />
+        </div>
       </div>
       <div className="rounded-md border">
         <Table>
