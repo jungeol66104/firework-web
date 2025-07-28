@@ -1,5 +1,5 @@
 import { ColumnDef } from "@tanstack/react-table"
-import { MoreHorizontal } from "lucide-react"
+import { MoreHorizontal, Copy } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { DataItem } from "@/lib/types"
@@ -20,10 +20,35 @@ const createColumns = (router: any): ColumnDef<DataItem>[] => [
     accessorKey: "interaction",
     header: () => <div>상호작용 링크 (ID)</div>,
     cell: ({ row }) => (
-        <div>
-            <button className="w-[140px] text-blue-600 hover:text-blue-800 underline cursor-pointer" onClick={() => router.push(`/${row.original.id}/interaction`)}>{row.original.id}</button>
+        <div className="w-[130px]">
+            <button className="text-blue-600 hover:text-blue-800 underline cursor-pointer" onClick={() => router.push(`/${row.original.id}/interaction`)}>{row.original.id}</button>
         </div>
     ),
+  },
+  {
+    id: "copy",
+    header: () => <div></div>,
+    cell: ({ row }) => {
+      const copyToClipboard = async (text: string) => {
+        try {
+          await navigator.clipboard.writeText(text)
+          console.log("Copied to clipboard:", text)
+        } catch (err) {
+          console.error("Failed to copy:", err)
+        }
+      }
+
+      return (
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          className="h-6 w-6 p-0 hover:bg-gray-100" 
+          onClick={() => copyToClipboard(`${window.location.origin}/${row.original.id}/interaction`)}
+        >
+          <Copy className="h-3 w-3" />
+        </Button>
+      )
+    },
   },
   {
     accessorKey: "createdAt",
