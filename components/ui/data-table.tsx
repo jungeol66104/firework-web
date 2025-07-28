@@ -11,12 +11,14 @@ import { DataItem } from "@/lib/types"
 import { sampleData } from "@/lib/constants"
 import { useRouter } from "next/navigation"
 import createColumns from "@/components/columns"
+import createTestColumns from "@/components/testColumns"
 
 const data: DataItem[] = sampleData
 
 export function DataTable() {
   const router = useRouter()
-  const columns = createColumns(router)
+  // const columns = createColumns(router)
+  const columns = createTestColumns(router)
   const table = useReactTable({ data, columns, getCoreRowModel: getCoreRowModel(), getPaginationRowModel: getPaginationRowModel() })
 
   return (
