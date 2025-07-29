@@ -3,8 +3,10 @@ import { MoreHorizontal, Copy } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { DataItem } from "@/lib/types"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
+import { useState } from "react"
 
-const createColumns = (router: any): ColumnDef<DataItem>[] => [
+const createColumns = (router: any, onDelete?: (id: string) => Promise<void>): ColumnDef<DataItem>[] => [
   {
     accessorKey: "index",
     header: "번호",
@@ -12,15 +14,15 @@ const createColumns = (router: any): ColumnDef<DataItem>[] => [
     cell: ({ row }) => <div className="font-medium">{row.index + 1}</div>,
   },
   {
-    accessorKey: "name",
-    header: "이름",
-    cell: ({ row }) => <div>{row.getValue("name")}</div>,
+    accessorKey: "candidate_name",
+    header: "지원자명",
+    cell: ({ row }) => <div>{row.getValue("candidate_name")}</div>,
   },
   {
     accessorKey: "interaction",
     header: () => <div>상호작용 링크 (ID)</div>,
     cell: ({ row }) => (
-        <div className="w-[130px]">
+        <div className="w-[140px]">
             <button className="text-blue-600 hover:text-blue-800 underline cursor-pointer" onClick={() => router.push(`/${row.original.id}/interaction`)}>{row.original.id}</button>
         </div>
     ),
@@ -42,7 +44,7 @@ const createColumns = (router: any): ColumnDef<DataItem>[] => [
         <Button 
           variant="ghost" 
           size="sm" 
-          className="h-6 w-6 p-0 hover:bg-gray-100" 
+          className="h-6 w-6 p-0 hover:bg-gray-100 cursor-pointer" 
           onClick={() => copyToClipboard(`${window.location.origin}/${row.original.id}/interaction`)}
         >
           <Copy className="h-3 w-3" />
@@ -51,14 +53,14 @@ const createColumns = (router: any): ColumnDef<DataItem>[] => [
     },
   },
   {
-    accessorKey: "createdAt",
+    accessorKey: "created_at",
     header: () => <div className="w-9 min-w-9 max-w-9 ">생성</div>,
-    cell: ({ row }) => <div className="w-9 min-w-9 max-w-9">{row.getValue("createdAt")}</div>,
+    cell: ({ row }) => <div className="w-9 min-w-9 max-w-9">{row.getValue("created_at")}</div>,
   },
   {
-    accessorKey: "updatedAt",
+    accessorKey: "updated_at",
     header: () => <div className="w-9 min-w-9 max-w-9">수정</div>,
-    cell: ({ row }) => <div className="w-9 min-w-9 max-w-9">{row.getValue("updatedAt")}</div>,
+    cell: ({ row }) => <div className="w-9 min-w-9 max-w-9">{row.getValue("updated_at")}</div>,
   },
   {
     id: "actions",
@@ -66,6 +68,7 @@ const createColumns = (router: any): ColumnDef<DataItem>[] => [
     header: () => <div className="w-1"></div>,
     cell: ({ row }) => {
       const item = row.original
+      const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
 
       const copyToClipboard = async (text: string) => {
         try {
@@ -76,15 +79,57 @@ const createColumns = (router: any): ColumnDef<DataItem>[] => [
         }
       }
 
+      const handleDelete = async () => {
+        if (onDelete) {
+          try {
+            await onDelete(item.id)
+            console.log("Interview deleted successfully")
+            setIsDeleteDialogOpen(false)
+          } catch (error) {
+            console.error("Failed to delete interview:", error)
+            alert("면접 삭제에 실패했습니다. 다시 시도해주세요.")
+          }
+        }
+      }
+
       return (
         <div className="w-1">
           <DropdownMenu modal={false}>
-            <DropdownMenuTrigger asChild><Button variant="ghost" className="h-8 w-8 p-0"><span className="sr-only">메뉴 열기</span><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="h-8 w-8 p-0 cursor-pointer">
+                <span className="sr-only">메뉴 열기</span>
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => copyToClipboard(item.id)} className="cursor-pointer">ID 복사</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => console.log("Delete item:", item.id)} className="cursor-pointer !text-red-600 !hover:text-red-600">삭제</DropdownMenuItem>
+              <DropdownMenuItem 
+                onClick={() => setIsDeleteDialogOpen(true)} 
+                className="cursor-pointer !text-red-600 !hover:text-red-600"
+              >
+                삭제
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+
+          <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>면접 삭제</AlertDialogTitle>
+                <AlertDialogDescription>
+                  정말로 이 면접을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>취소</AlertDialogCancel>
+                <AlertDialogAction 
+                  onClick={handleDelete}
+                  className="bg-red-600 hover:bg-red-700"
+                >
+                  삭제
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       )
     },

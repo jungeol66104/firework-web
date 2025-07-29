@@ -1,34 +1,31 @@
 "use client"
 
 import * as React from "react"
-import { flexRender,getCoreRowModel,getPaginationRowModel,useReactTable} from "@tanstack/react-table"
+import { flexRender, getCoreRowModel, getPaginationRowModel, useReactTable, ColumnDef } from "@tanstack/react-table"
 import { ChevronLeft, ChevronRight, ChevronFirst, ChevronLast } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { DataItem } from "@/lib/types"
-import { sampleData } from "@/lib/constants"
-import { useRouter } from "next/navigation"
-import createColumns from "@/components/columns"
-import createTestColumns from "@/components/testColumns"
 import { CreateInterviewButton } from "@/components/createInterviewButton"
 
-const data: DataItem[] = sampleData
+interface DataTableProps<TData> {
+  data: TData[]
+  columns: ColumnDef<TData>[]
+  searchPlaceholder?: string
+  emptyMessage?: string
+  showCreateButton?: boolean
+  onSearch?: (value: string) => void
+}
 
-export function DataTable() {
-  const router = useRouter()
-  // const columns = createColumns(router)
-  const columns = createTestColumns(router)
+export function DataTable<TData>({ data, columns, searchPlaceholder = "검색...", emptyMessage = "데이터가 없습니다.", showCreateButton = false, onSearch }: DataTableProps<TData>) {
   const table = useReactTable({ data, columns, getCoreRowModel: getCoreRowModel(), getPaginationRowModel: getPaginationRowModel() })
 
   return (
     <div className="w-full">
       <div className="flex items-center py-4">
-        <Input placeholder="이름으로 검색..." className="max-w-sm" />
-        <div className="ml-auto">
-          <CreateInterviewButton />
-        </div>
+        <Input placeholder={searchPlaceholder} className="max-w-sm" onChange={(e) => onSearch?.(e.target.value)}/>
+        {showCreateButton && <div className="ml-auto"><CreateInterviewButton /></div>}
       </div>
       <div className="rounded-md border">
         <Table>
@@ -58,7 +55,11 @@ export function DataTable() {
                 </TableRow>
               ))
             ) : (
-              <TableRow><TableCell colSpan={columns.length} className="h-24 text-center">결과가 없습니다.</TableCell></TableRow>
+              <TableRow>
+                <TableCell colSpan={columns.length} className="h-24 text-center">
+                  {emptyMessage}
+                </TableCell>
+              </TableRow>
             )}
           </TableBody>
         </Table>
@@ -77,16 +78,8 @@ export function DataTable() {
                 table.setPageSize(pageSize)
               }}
             >
-              <SelectTrigger className="w-[70px] h-9">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {[10, 20, 30, 40, 50].map((pageSize) => (
-                  <SelectItem key={pageSize} value={`${pageSize}`} className="cursor-pointer">
-                    {pageSize}
-                  </SelectItem>
-                ))}
-              </SelectContent>
+              <SelectTrigger className="w-[70px] h-9"><SelectValue /></SelectTrigger>
+              <SelectContent>{[10, 20, 30, 40, 50].map((pageSize) => (<SelectItem key={pageSize} value={`${pageSize}`} className="cursor-pointer">{pageSize}</SelectItem>))}</SelectContent>
             </Select>
           </div>
           <div className="flex items-center space-x-2">
