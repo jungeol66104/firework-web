@@ -1,5 +1,6 @@
 import { createClient } from '../serverClient'
-import { fetchInterviews, FetchInterviewsParams, FetchInterviewsResult } from './services'
+import { fetchInterviews } from './services'
+import { FetchInterviewsParams, FetchInterviewsResult } from '@/lib/types'
 
 export async function fetchInterviewsServer(
   params: FetchInterviewsParams = {}

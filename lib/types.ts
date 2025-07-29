@@ -1,11 +1,15 @@
 export type DataItem = {
   id: string
-  name: string
-  info: string
-  question: string
-  answer: string
-  createdAt: string
-  updatedAt: string
+  candidate_name: string
+  company_name: string
+  position: string
+  job_posting: string
+  cover_letter: string
+  company_info: string
+  expected_questions: string
+  company_evaluation: string
+  created_at: string
+  updated_at: string
 }
 
 export interface Interview {
