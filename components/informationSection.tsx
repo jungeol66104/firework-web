@@ -38,6 +38,7 @@ const formSchema = z.object({
   companyInfo: z.string().min(1, "기업 정보를 입력해주세요"),
   expectedQuestions: z.string().optional(),
   companyEvaluation: z.string().optional(),
+  other: z.string().optional(),
 })
 
 type FormData = z.infer<typeof formSchema>
@@ -65,6 +66,7 @@ export default function InformationSection({ showNavigation = true, interview }:
       companyInfo: interview.company_info || "",
       expectedQuestions: interview.expected_questions || "",
       companyEvaluation: interview.company_evaluation || "",
+      other: (interview as any).other || "",
     } : {
       candidateName: "",
       companyName: "",
@@ -75,6 +77,7 @@ export default function InformationSection({ showNavigation = true, interview }:
       companyInfo: "",
       expectedQuestions: "",
       companyEvaluation: "",
+      other: "",
     },
   })
 
@@ -225,6 +228,13 @@ export default function InformationSection({ showNavigation = true, interview }:
                 <FormItem>
                   <FormLabel>기업 평가 항목 (선택)</FormLabel>
                   <FormControl><Textarea placeholder="기업이 공개한 평가 항목 및 비중을 입력하세요" className="min-h-[100px]" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+            <FormField control={form.control} name="other" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>기타 (선택)</FormLabel>
+                  <FormControl><Textarea placeholder="기타 추가 정보를 입력하세요" className="min-h-[100px]" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
