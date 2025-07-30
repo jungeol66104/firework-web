@@ -6,13 +6,16 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useState } from "react"
 import { createInterviewClient } from "@/lib/supabase/services/clientServices"
-import { useRouter } from "next/navigation"
+import { Interview } from "@/lib/types"
 
-export function CreateInterviewButton() {
+interface CreateInterviewButtonProps {
+  onInterviewCreated?: (interview: Interview) => void
+}
+
+export function CreateInterviewButton({ onInterviewCreated }: CreateInterviewButtonProps) {
   const [candidateName, setCandidateName] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
-  const router = useRouter()
 
   const handleOpenChange = (open: boolean) => {
     setIsOpen(open)
@@ -36,8 +39,8 @@ export function CreateInterviewButton() {
         console.log("Created interview:", interview)
         setCandidateName("")
         handleOpenChange(false)
-        // Refresh the page to show the new interview
-        router.refresh()
+        // Call the callback to update parent state
+        onInterviewCreated?.(interview)
       } catch (error) {
         console.error("Failed to create interview:", error)
         alert("면접 생성에 실패했습니다. 다시 시도해주세요.")
@@ -58,19 +61,19 @@ export function CreateInterviewButton() {
         <DialogHeader>
           <DialogTitle>새 면접 생성</DialogTitle>
           <DialogDescription>
-            새로운 면접을 생성하려면 지원자 이름을 입력하세요.
+            새로운 면접을 생성하려면 지원자명을 입력하세요.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="candidate-name">지원자 이름</Label>
+              <Label htmlFor="candidate-name">지원자명</Label>
               <Input 
                 id="candidate-name" 
                 name="candidateName" 
                 value={candidateName}
                 onChange={(e) => setCandidateName(e.target.value)}
-                placeholder="지원자 이름을 입력하세요"
+                placeholder="지원자명을 입력하세요"
                 required
                 disabled={isLoading}
               />

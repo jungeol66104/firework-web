@@ -1,12 +1,13 @@
 import { ColumnDef } from "@tanstack/react-table"
-import { MoreHorizontal, Copy } from "lucide-react"
+import { MoreHorizontal, Copy, FileText } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { DataItem } from "@/lib/types"
+import { Interview } from "@/lib/types"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { useState } from "react"
+import { toast } from "sonner"
 
-const createColumns = (router: any, onDelete?: (id: string) => Promise<void>): ColumnDef<DataItem>[] => [
+const createColumns = (router: any, onDelete?: (id: string) => Promise<void>): ColumnDef<Interview>[] => [
   {
     accessorKey: "index",
     header: "번호",
@@ -34,9 +35,10 @@ const createColumns = (router: any, onDelete?: (id: string) => Promise<void>): C
       const copyToClipboard = async (text: string) => {
         try {
           await navigator.clipboard.writeText(text)
-          console.log("Copied to clipboard:", text)
+          toast.success("링크가 클립보드에 복사되었습니다")
         } catch (err) {
           console.error("Failed to copy:", err)
+          toast.error("링크 복사에 실패했습니다")
         }
       }
 
@@ -55,12 +57,20 @@ const createColumns = (router: any, onDelete?: (id: string) => Promise<void>): C
   {
     accessorKey: "created_at",
     header: () => <div className="w-9 min-w-9 max-w-9 ">생성</div>,
-    cell: ({ row }) => <div className="w-9 min-w-9 max-w-9">{row.getValue("created_at")}</div>,
+    cell: ({ row }) => {
+      const date = row.getValue("created_at") as string
+      const formattedDate = date ? new Date(date).toISOString().split('T')[0] : ''
+      return <div className="w-9 min-w-9 max-w-9">{formattedDate}</div>
+    },
   },
   {
     accessorKey: "updated_at",
     header: () => <div className="w-9 min-w-9 max-w-9">수정</div>,
-    cell: ({ row }) => <div className="w-9 min-w-9 max-w-9">{row.getValue("updated_at")}</div>,
+    cell: ({ row }) => {
+      const date = row.getValue("updated_at") as string
+      const formattedDate = date ? new Date(date).toISOString().split('T')[0] : ''
+      return <div className="w-9 min-w-9 max-w-9">{formattedDate}</div>
+    },
   },
   {
     id: "actions",
@@ -73,9 +83,10 @@ const createColumns = (router: any, onDelete?: (id: string) => Promise<void>): C
       const copyToClipboard = async (text: string) => {
         try {
           await navigator.clipboard.writeText(text)
-          console.log("Copied to clipboard:", text)
+          toast.success("링크가 클립보드에 복사되었습니다")
         } catch (err) {
           console.error("Failed to copy:", err)
+          toast.error("링크 복사에 실패했습니다")
         }
       }
 

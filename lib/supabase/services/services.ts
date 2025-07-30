@@ -72,3 +72,41 @@ export async function deleteInterview(
 
   console.log("Interview deleted successfully")
 }
+
+export async function searchInterviewsByCandidateName(
+  supabase: SupabaseClient,
+  candidateName: string,
+  limit: number = 10
+): Promise<Interview[]> {
+  console.log("searchInterviewsByCandidateName called with candidateName:", candidateName)
+  
+  const { data, error } = await supabase
+    .from('interviews')
+    .select('*')
+    .ilike('candidate_name', `%${candidateName}%`)
+    .order('created_at', { ascending: false })
+    .limit(limit)
+
+  console.log("Supabase search response - data:", data, "error:", error)
+
+  if (error) {
+    console.error("Supabase search error:", error)
+    throw new Error(`Failed to search interviews: ${error.message}`)
+  }
+
+  console.log("Interviews found:", data?.length || 0)
+  return data || []
+}
+
+export async function fetchInterviewById(supabase: SupabaseClient, interviewId: string): Promise<Interview | null> {
+  const { data, error } = await supabase
+    .from('interviews')
+    .select('*')
+    .eq('id', interviewId)
+    .single();
+  if (error) {
+    if (error.code === 'PGRST116') return null; // Not found
+    throw new Error(`Failed to fetch interview: ${error.message}`);
+  }
+  return data;
+}

@@ -9,11 +9,12 @@ import { Textarea } from "@/components/ui/textarea"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { useParams } from "next/navigation"
 import React from "react"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 
 const formSchema = z.object({
   comment: z.string().optional(),
 })
-
+ 
 type FormData = z.infer<typeof formSchema>
 
 interface QuestionsSectionProps {
@@ -21,10 +22,16 @@ interface QuestionsSectionProps {
 }
 
 export default function QuestionsSection({ showNavigation = true }: QuestionsSectionProps) {
-  const { userId } = useParams()
+  const { interviewId } = useParams()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [question, setQuestion] = useState("")
   const [loadingQuestion, setLoadingQuestion] = useState(true)
+  
+  // Chances counter (dummy - resets on page refresh)
+  const [chancesLeft, setChancesLeft] = useState(4) // Start with 4 chances
+  const [showConfirmationDialog, setShowConfirmationDialog] = useState(false)
+  const [showPaymentDialog, setShowPaymentDialog] = useState(false)
+  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null)
 
   const form = useForm<{ comment?: string }>({
     resolver: zodResolver(formSchema),
@@ -51,19 +58,43 @@ export default function QuestionsSection({ showNavigation = true }: QuestionsSec
       }
     }
     fetchQuestion()
-  }, [userId])
+  }, [interviewId])
+
+  const handleGenerate = () => {
+    if (chancesLeft <= 0) {
+      setShowPaymentDialog(true)
+      return
+    }
+
+    setPendingAction(() => () => {
+      setIsSubmitting(true)
+      // Simulate API call
+      setTimeout(() => {
+        setChancesLeft(prev => prev - 1)
+        setIsSubmitting(false)
+        alert("질문이 성공적으로 생성되었습니다!")
+      }, 1000)
+    })
+    setShowConfirmationDialog(true)
+  }
 
   const onSubmit = async (data: { comment?: string }) => {
-    setIsSubmitting(true)
-    try {
-      console.log("코멘트 폼 데이터:", data)
-      alert("코멘트가 성공적으로 제출되었습니다!")
-    } catch (error) {
-      console.error("Error submitting form:", error)
-      alert("오류가 발생했습니다. 다시 시도해주세요.")
-    } finally {
-      setIsSubmitting(false)
+    console.log("코멘트 폼 데이터:", data)
+    alert("코멘트가 성공적으로 제출되었습니다!")
+  }
+
+  const handleConfirmGenerate = () => {
+    setShowConfirmationDialog(false)
+    if (pendingAction) {
+      pendingAction()
+      setPendingAction(null)
     }
+  }
+
+  const handlePaymentConfirm = () => {
+    setShowPaymentDialog(false)
+    alert("결제 페이지로 이동합니다...")
+    // TODO: Redirect to payment page
   }
 
   return (
@@ -107,18 +138,22 @@ export default function QuestionsSection({ showNavigation = true }: QuestionsSec
                       variant="outline"
                       className="px-8 py-2"
                       onClick={() => {
-                        window.location.href = `/${userId}/information`
+                        window.location.href = `/${interviewId}/information`
                       }}
                     >
                       정보로 이동
                     </Button>
                   )}
                 </div>
-                <div className="flex gap-3">
+                <div className="flex gap-3 items-center">
+                  <span className="text-sm text-zinc-600 font-medium">
+                    남은 횟수: {chancesLeft}회
+                  </span>
                   <Button
-                    type="submit"
+                    type="button"
                     disabled={isSubmitting}
                     className="px-8 py-2 bg-black text-white hover:bg-zinc-800"
+                    onClick={handleGenerate}
                   >
                     {isSubmitting ? "생성 중..." : "생성"}
                   </Button>
@@ -128,7 +163,7 @@ export default function QuestionsSection({ showNavigation = true }: QuestionsSec
                       variant="outline"
                       className="px-8 py-2"
                       onClick={() => {
-                        window.location.href = `/${userId}/answers`
+                        window.location.href = `/${interviewId}/answers`
                       }}
                     >
                       답변으로 이동
@@ -139,6 +174,42 @@ export default function QuestionsSection({ showNavigation = true }: QuestionsSec
             </div>
           </form>
         </Form>
+
+        {/* Confirmation Dialog */}
+        <AlertDialog open={showConfirmationDialog} onOpenChange={setShowConfirmationDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>확인</AlertDialogTitle>
+              <AlertDialogDescription>
+                1회가 차감됩니다. 진행하시겠습니까?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>취소</AlertDialogCancel>
+              <AlertDialogAction onClick={handleConfirmGenerate}>
+                진행
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Payment Dialog */}
+        <AlertDialog open={showPaymentDialog} onOpenChange={setShowPaymentDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>사용 횟수 소진</AlertDialogTitle>
+              <AlertDialogDescription>
+                모든 사용 횟수를 소진했습니다. 다른 요금제로 결제하시겠습니까?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>취소</AlertDialogCancel>
+              <AlertDialogAction onClick={handlePaymentConfirm}>
+                결제하기
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
   )
 } 
