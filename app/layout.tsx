@@ -2,13 +2,15 @@
 
 import "./globals.css";
 import { usePathname } from "next/navigation";
-import { NavBar } from "@/components/navBar";
+import { AdminNavBar } from "@/components/admin/adminNavBar";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/ui/theme-provider";
+import { NavBar } from "@/components/navBar";
 
 export default function RootLayout({children,}: Readonly<{children: React.ReactNode;}>) {
   const pathname = usePathname();
-  const isSigninPage = pathname === "/signin";
+  const isAdminPage = pathname.startsWith("/admin");
+  const isAuthPage = pathname.startsWith("/auth");
 
   return (
     <>
@@ -16,7 +18,8 @@ export default function RootLayout({children,}: Readonly<{children: React.ReactN
         <head />
         <body>
           <ThemeProvider attribute="class" defaultTheme="white" enableSystem disableTransitionOnChange>
-            {!isSigninPage && <NavBar />}
+            {isAdminPage && <AdminNavBar />}
+            {!isAdminPage && !isAuthPage && <NavBar />}
             {children}
             <Toaster position="top-right" />
           </ThemeProvider>

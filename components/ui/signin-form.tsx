@@ -1,42 +1,70 @@
 "use client"
 
-import { cn } from "@/lib/utils"
+import { cn } from "@/utils/utils"
 import { Button } from "@/components/ui/button"
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useRouter } from "next/navigation"
+import Link from "next/link"
+import { signin } from "@/app/auth/actions"
+import { useState } from "react"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { signinSchema, type SigninFormData } from "@/utils/validations"
 
 export function SigninForm({ className, ...props }: React.ComponentProps<"div">) {
-  const router = useRouter()
+  const [error, setError] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault()
-    router.push("/")
+  const { register, handleSubmit, formState: { errors } } = useForm<SigninFormData>({resolver: zodResolver(signinSchema)})
+
+  async function onSubmit(data: SigninFormData) {
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      const formData = new FormData()
+      formData.append('email', data.email)
+      formData.append('password', data.password)
+      
+      await signin(formData)
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : '로그인 중 오류가 발생했습니다.'
+      setError(errorMessage)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card>
         <CardHeader>
-          <CardTitle>계정에 로그인</CardTitle>
+          <CardTitle>로그인</CardTitle>
           <CardDescription>
             아래에 이메일을 입력하여 계정에 로그인하세요
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleLogin}>
+          <form onSubmit={handleSubmit(onSubmit)}>
             <div className="flex flex-col gap-6">
+              {error && (
+                <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md">
+                  {error}
+                </div>
+              )}
               <div className="grid gap-3">
                 <Label htmlFor="email">이메일</Label>
                 <Input
                   id="email"
                   type="email"
-                  placeholder="m@example.com"
-                  defaultValue="test@test.com"
-                  disabled
-                  required
+                  placeholder="jungcoach@example.com"
+                  {...register('email')}
+                  className={errors.email ? 'border-red-500' : ''}
                 />
+                {errors.email && (
+                  <p className="text-sm text-red-600">{errors.email.message}</p>
+                )}
               </div>
               <div className="grid gap-3">
                 <div className="flex items-center">
@@ -51,26 +79,28 @@ export function SigninForm({ className, ...props }: React.ComponentProps<"div">)
                 <Input 
                   id="password" 
                   type="password" 
-                  defaultValue="test123"
-                  disabled
-                  required 
+                  {...register('password')}
+                  className={errors.password ? 'border-red-500' : ''}
                 />
+                {errors.password && (
+                  <p className="text-sm text-red-600">{errors.password.message}</p>
+                )}
               </div>
               <div className="flex flex-col gap-3">
-                <Button type="submit" className="w-full">
-                  로그인
+                <Button type="submit" className="w-full" disabled={isLoading}>
+                  {isLoading ? "로그인 중..." : "로그인"}
                 </Button>
                 {/* <Button variant="outline" className="w-full">
                   Google로 로그인
                 </Button> */}
               </div>
             </div>
-            {/* <div className="mt-4 text-center text-sm">
+            <div className="mt-4 text-center text-sm">
               계정이 없으신가요?{" "}
-              <a href="#" className="underline underline-offset-4">
+              <Link href="/auth/signup" className="underline underline-offset-4 hover:text-primary">
                 회원가입
-              </a>
-            </div> */}
+              </Link>
+            </div>
           </form>
         </CardContent>
       </Card>
