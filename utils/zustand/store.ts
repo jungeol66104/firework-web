@@ -1,0 +1,44 @@
+import { create } from 'zustand'
+import { devtools } from 'zustand/middleware'
+import { createInterviewSlice, InterviewSlice } from './slices/interviewSlice'
+import { createQuestionsSlice, QuestionsSlice } from './slices/questionsSlice'
+import { createAnswersSlice, AnswersSlice } from './slices/answersSlice'
+
+// Combined store type
+interface Store extends InterviewSlice, QuestionsSlice, AnswersSlice {}
+
+// Create the main store
+export const useStore = create<Store>()(
+  devtools(
+    (set, get) => ({
+      ...createInterviewSlice(set, get),
+      ...createQuestionsSlice(set, get),
+      ...createAnswersSlice(set, get),
+    }),
+    {
+      name: 'interview-store',
+    }
+  )
+)
+
+// Selector hooks for better performance
+// Interview selectors
+export const useCurrentInterview = () => useStore((state) => state.currentInterview)
+export const useInterviews = () => useStore((state) => state.interviews)
+export const useInterviewLoading = () => useStore((state) => state.isLoading)
+
+// Questions selectors
+export const useQuestions = () => useStore((state) => state.questions)
+export const useCurrentQuestion = () => useStore((state) => state.currentQuestion)
+export const useQuestionsLoading = () => useStore((state) => state.isLoadingQuestions)
+export const useQuestionGenerationLoading = () => useStore((state) => state.isLoadingQuestionGeneration)
+
+// Answers selectors
+export const useAnswers = () => useStore((state) => state.answers)
+export const useCurrentAnswer = () => useStore((state) => state.currentAnswer)
+export const useAnswersLoading = () => useStore((state) => state.isLoadingAnswers)
+export const useAnswerGenerationLoading = () => useStore((state) => state.isLoadingAnswerGeneration)
+
+
+
+

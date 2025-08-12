@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useParams } from "next/navigation"
 import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -9,35 +9,20 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import { FileText, Eye, Trash2 } from "lucide-react"
 import { Interview } from "@/utils/types"
+import { fetchInterviewByIdClient, getCurrentUserClient, updateInterviewClient } from "@/utils/supabase/services/clientServices"
+import { useCurrentInterview, useStore } from "@/utils/zustand"
 
 const formSchema = z.object({
   companyName: z.string().min(1, "기업명을 입력해주세요"),
   position: z.string().min(1, "직무를 입력해주세요"),
   jobPosting: z.string().min(1, "채용공고를 입력해주세요"),
   coverLetter: z.string().min(1, "자기소개서를 입력해주세요"),
-  resume: z.union([
-    z.object({
-      type: z.literal("pdf"),
-      file: z.instanceof(File).refine((file) => file.size > 0, "이력서 파일을 업로드해주세요")
-        .refine((file) => file.type === "application/pdf", "PDF 파일만 업로드 가능합니다")
-    }),
-    z.object({
-      type: z.literal("word"),
-      file: z.instanceof(File).refine((file) => file.size > 0, "이력서 파일을 업로드해주세요")
-        .refine((file) => file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "Word 파일만 업로드 가능합니다")
-    }),
-    z.object({
-      type: z.literal("text"),
-      content: z.string().min(1, "이력서 내용을 입력해주세요")
-    })
-  ]),
+  resume: z.string().min(1, "이력서 내용을 입력해주세요"),
   companyInfo: z.string().min(1, "기업 정보를 입력해주세요"),
   expectedQuestions: z.string().optional(),
   companyEvaluation: z.string().optional(),
-  other: z.string().optional(),
+  otherNotes: z.string().optional(),
 })
 
 type FormData = z.infer<typeof formSchema>
@@ -47,103 +32,176 @@ interface InformationSectionProps {
   interview?: Interview
 }
 
-export default function InformationSection({ showNavigation = true, interview }: InformationSectionProps) {
-  const { interviewId } = useParams()
+// Default interview data
+const defaultInterview: Interview = {
+  id: "",
+  candidate_name: "",
+  company_name: "",
+  position: "",
+  job_posting: "",
+  cover_letter: "",
+  resume: "",
+  company_info: "",
+  expected_questions: "",
+  company_evaluation: "",
+  other: "",
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
+  user_id: "",
+}
 
+export default function InformationSection({ showNavigation = true, interview: propInterview }: InformationSectionProps) {
+  const params = useParams()
+  const interviewId = params.interviewId as string
+  
+  // Get state from Zustand store
+  const currentInterview = useCurrentInterview()
+  const setCurrentInterview = useStore((state) => state.setCurrentInterview)
+  const setLoading = useStore((state) => state.setLoading)
+  
+  // Use prop interview if provided, otherwise use store interview
+  const interview = propInterview || currentInterview
+  const loading = useStore((state) => state.isLoading)
+  
+  const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [resumeTab, setResumeTab] = useState("text")
+
+  // Fetch interview data if not provided as prop
+  useEffect(() => {
+    const fetchInterview = async () => {
+      if (propInterview) {
+        setCurrentInterview(propInterview)
+        setLoading(false)
+        return
+      }
+
+      if (!interviewId) return
+
+      try {
+        setLoading(true)
+        setError(null)
+        
+        // Get current user
+        const user = await getCurrentUserClient()
+        const currentUserId = user?.id || undefined
+        
+        // Fetch interview data
+        const interviewData = await fetchInterviewByIdClient(interviewId, currentUserId)
+        
+        if (!interviewData) {
+          setError("Interview not found")
+          setCurrentInterview(defaultInterview)
+          return
+        }
+        
+        setCurrentInterview(interviewData)
+      } catch (err) {
+        console.error("Error fetching interview:", err)
+        setError("Failed to load interview")
+        setCurrentInterview(defaultInterview)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchInterview()
+  }, [interviewId, propInterview, setCurrentInterview, setLoading])
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
-    defaultValues: interview ? {
-      companyName: interview.company_name || "",
-      position: interview.position || "",
-      jobPosting: interview.job_posting || "",
-      coverLetter: interview.cover_letter || "",
-      resume: { type: "text", content: "" }, // No file in DB, fallback to text
-      companyInfo: interview.company_info || "",
-      expectedQuestions: interview.expected_questions || "",
-      companyEvaluation: interview.company_evaluation || "",
-      other: (interview as any).other || "",
-    } : {
+          defaultValues: interview ? {
+        companyName: interview.company_name || "",
+        position: interview.position || "",
+        jobPosting: interview.job_posting || "",
+        coverLetter: interview.cover_letter || "",
+        resume: interview.resume || "",
+        companyInfo: interview.company_info || "",
+        expectedQuestions: interview.expected_questions || "",
+        companyEvaluation: interview.company_evaluation || "",
+        otherNotes: interview.other || "",
+      } : {
       companyName: "",
       position: "",
       jobPosting: "",
       coverLetter: "",
-      resume: { type: "text", content: "" },
+      resume: "",
       companyInfo: "",
       expectedQuestions: "",
       companyEvaluation: "",
-      other: "",
+      otherNotes: "",
     },
   })
 
+  // Update form when interview data is loaded
+  useEffect(() => {
+    if (interview) {
+      form.reset({
+        companyName: interview.company_name || "",
+        position: interview.position || "",
+        jobPosting: interview.job_posting || "",
+        coverLetter: interview.cover_letter || "",
+        resume: interview.resume || "",
+        companyInfo: interview.company_info || "",
+        expectedQuestions: interview.expected_questions || "",
+        companyEvaluation: interview.company_evaluation || "",
+        otherNotes: interview.other || "",
+      })
+    }
+  }, [interview, form])
+
   const onSubmit = async (data: FormData) => {
+    if (!interviewId) {
+      alert("면접 ID를 찾을 수 없습니다.")
+      return
+    }
+
     setIsSubmitting(true)
     try {
-      console.log("Form data:", data)
-      alert("면접이 성공적으로 생성되었습니다!")
+      console.log("Starting form submission with data:", data)
+      
+      // Get current user
+      const user = await getCurrentUserClient()
+      console.log("Current user:", user)
+      
+      if (!user?.id) {
+        alert("사용자 인증이 필요합니다. 다시 로그인해주세요.")
+        return
+      }
+
+      // Prepare update data
+      const updateData = {
+        company_name: data.companyName,
+        position: data.position,
+        job_posting: data.jobPosting,
+        cover_letter: data.coverLetter,
+        resume: data.resume,
+        company_info: data.companyInfo,
+        expected_questions: data.expectedQuestions || "",
+        company_evaluation: data.companyEvaluation || "",
+        other: data.otherNotes || "",
+      }
+
+      console.log("Update data prepared:", updateData)
+      console.log("Calling updateInterviewClient with interviewId:", interviewId, "user_id:", user.id)
+
+      // Update interview in database
+      const updatedInterview = await updateInterviewClient(interviewId, updateData, user.id)
+      
+      // Update store state
+      setCurrentInterview(updatedInterview)
+      
+      console.log("Interview updated successfully:", updatedInterview)
+      alert("면접 정보가 성공적으로 저장되었습니다!")
     } catch (error) {
-      console.error("Error submitting form:", error)
-      alert("오류가 발생했습니다. 다시 시도해주세요.")
+      console.error("Error updating interview:", error)
+      alert("저장 중 오류가 발생했습니다. 다시 시도해주세요.")
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  const handleResumeFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (file) {
-      if (resumeTab === "pdf") form.setValue("resume", { type: "pdf", file })
-      else if (resumeTab === "word") form.setValue("resume", { type: "word", file })
-    }
-  }
 
-  const handleResumeFileDelete = () => {
-    if (resumeTab === "pdf") form.setValue("resume", { type: "pdf", file: undefined as any })
-    else if (resumeTab === "word") form.setValue("resume", { type: "word", file: undefined as any })
-  }
 
-  const handleResumeFileView = (file: File) => {
-    const url = URL.createObjectURL(file)
-    window.open(url, '_blank')
-  }
-
-  const handleResumeTabChange = (value: string) => {
-    setResumeTab(value)
-    if (value === "pdf") form.setValue("resume", { type: "pdf", file: undefined as any })
-    else if (value === "word") form.setValue("resume", { type: "word", file: undefined as any })
-    else if (value === "text") form.setValue("resume", { type: "text", content: "" })
-  }
-
-  const ResumeFileUploadField = ({ accept = ".pdf", fileType = "PDF" }: { accept?: string, fileType?: string }) => {
-    const resumeValue = form.watch("resume")
-    const file = (resumeValue.type === "pdf" || resumeValue.type === "word") && resumeValue.type === resumeTab 
-      ? (resumeValue as { type: "pdf" | "word"; file: File }).file 
-      : undefined
-    
-    return (
-      <div className="flex items-center gap-2">
-        {!file ? (
-          <div className="relative flex-1">
-            <Input type="file" accept={accept} onChange={handleResumeFileChange} className="cursor-pointer opacity-0 absolute inset-0 w-full h-full"/>
-            <div className="flex items-center px-3 py-2 border rounded-md bg-background hover:bg-muted/50 transition-colors cursor-pointer h-9">
-              <span className="text-sm text-muted-foreground">{fileType} 파일 업로드</span>
-            </div>
-          </div>
-        ) : (
-          <>
-            <div className="flex-1 flex items-center gap-2 px-3 py-2 border rounded-md bg-muted/50 h-9">
-              <FileText className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm truncate">{file.name}</span>
-            </div>
-            <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0 group" onClick={() => handleResumeFileView(file)}><Eye className="h-4 w-4 group-hover:text-blue-600 transition-colors" /></Button>
-            <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0 group" onClick={handleResumeFileDelete}><Trash2 className="h-4 w-4 group-hover:text-red-600 transition-colors" /></Button>
-          </>
-        )}
-      </div>
-    )
-  }
 
   return (
     <div id="information" className="w-full max-w-4xl p-8">
@@ -180,22 +238,13 @@ export default function InformationSection({ showNavigation = true, interview }:
                   <FormMessage />
                 </FormItem>
               )} />
-            <FormItem>
-              <FormLabel>이력서 *</FormLabel>
-              <FormControl>
-                <Tabs value={resumeTab} onValueChange={handleResumeTabChange} className="w-full">
-                  <TabsList className="grid w-full grid-cols-3">
-                    <TabsTrigger value="text" className="cursor-pointer">텍스트</TabsTrigger>
-                    <TabsTrigger value="pdf" className="cursor-pointer">PDF</TabsTrigger>
-                    <TabsTrigger value="word" className="cursor-pointer">Word</TabsTrigger>
-                  </TabsList>
-                  <TabsContent value="text"><FormField control={form.control} name="resume.content" render={({ field }) => (<Textarea placeholder="이력서 내용을 입력하세요" className="min-h-[100px]" {...field} />)} /></TabsContent>
-                  <TabsContent value="pdf"><ResumeFileUploadField accept=".pdf" fileType="PDF" /></TabsContent>
-                  <TabsContent value="word"><ResumeFileUploadField accept=".docx" fileType="Word" /></TabsContent>
-                </Tabs>
-              </FormControl>
-              <FormMessage />
-            </FormItem>
+            <FormField control={form.control} name="resume" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>이력서 *</FormLabel>
+                  <FormControl><Textarea placeholder="이력서 내용을 입력하세요" className="min-h-[100px]" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
             <FormField control={form.control} name="companyInfo" render={({ field }) => (
                 <FormItem>
                   <FormLabel>기업 정보 *</FormLabel>
@@ -221,7 +270,7 @@ export default function InformationSection({ showNavigation = true, interview }:
                   <FormMessage />
                 </FormItem>
               )} />
-            <FormField control={form.control} name="other" render={({ field }) => (
+            <FormField control={form.control} name="otherNotes" render={({ field }) => (
                 <FormItem>
                   <FormLabel>기타 (선택)</FormLabel>
                   <FormControl><Textarea placeholder="기타 추가 정보를 입력하세요" className="min-h-[100px]" {...field} /></FormControl>
@@ -235,7 +284,7 @@ export default function InformationSection({ showNavigation = true, interview }:
               <div></div>
               <div className="flex gap-3">
                 <Button type="submit" disabled={isSubmitting} className="px-8 py-2">{isSubmitting ? "저장 중..." : "저장"}</Button>
-                {showNavigation && (<Button type="button" variant="outline" className="px-8 py-2" onClick={() => window.location.href = `/${interviewId}/questions`}>질문으로 이동</Button>)}
+                {showNavigation && (<Button type="button" variant="outline" className="px-8 py-2" onClick={() => document.getElementById('questions')?.scrollIntoView({ behavior: 'smooth' })}>질문으로 이동</Button>)}
               </div>
             </div>
           </div>

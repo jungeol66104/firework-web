@@ -1,5 +1,5 @@
 import { createClient } from '../clients/server'
-import { fetchInterviews, fetchInterviewById, createProfile, fetchProfileById, updateProfile, fetchUserInterviews, getCurrentUserInterviews, deleteInterview, searchInterviewsByCandidateName, getCurrentUser, checkInterviewOwnership, updateInterview, getCurrentUserProfile, updateCurrentUserProfile, deleteCurrentUserAccount } from './services'
+import { fetchInterviews, fetchInterviewById, createProfile, fetchProfileById, updateProfile, fetchUserInterviews, getCurrentUserInterviews, deleteInterview, searchInterviewsByCandidateName, getCurrentUser, checkInterviewOwnership, updateInterview, getCurrentUserProfile, updateCurrentUserProfile, deleteCurrentUserAccount, fetchInterviewQuestions } from './services'
 import { FetchInterviewsParams, FetchInterviewsResult, CreateProfileParams, Profile, Interview } from '@/utils/types'
 
 export async function fetchInterviewsServer(params: FetchInterviewsParams = {}): Promise<FetchInterviewsResult> {
@@ -114,4 +114,10 @@ export async function deleteCurrentUserAccountServer() {
   if (deleteError) {
     throw new Error(`Failed to delete user account: ${deleteError.message}`)
   }
+}
+
+// Interview Questions server services
+export async function fetchInterviewQuestionsServer(interviewId: string) {
+  const supabase = await createClient()
+  return fetchInterviewQuestions(supabase, interviewId)
 }

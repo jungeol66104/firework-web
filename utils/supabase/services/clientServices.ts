@@ -1,5 +1,5 @@
 import { createClient } from '../clients/client'
-import { createInterview, deleteInterview, searchInterviewsByCandidateName, fetchInterviewById, fetchInterviews, fetchUserInterviews, getCurrentUserInterviews, getCurrentUser, checkInterviewOwnership, updateInterview, getCurrentUserProfile, updateCurrentUserProfile, deleteCurrentUserAccount } from './services'
+import { createInterview, deleteInterview, searchInterviewsByCandidateName, fetchInterviewById, fetchInterviews, fetchUserInterviews, getCurrentUserInterviews, getCurrentUser, checkInterviewOwnership, updateInterview, getCurrentUserProfile, updateCurrentUserProfile, deleteCurrentUserAccount, fetchInterviewQuestions, createInterviewQuestion, updateInterviewQuestion, deleteInterviewQuestion, fetchInterviewAnswers, createInterviewAnswer, updateInterviewAnswer, deleteInterviewAnswer } from './services'
 import { CreateInterviewParams, Interview, FetchInterviewsParams, FetchInterviewsResult } from '@/utils/types'
 
 export async function createInterviewClient(
@@ -118,4 +118,152 @@ export async function updateCurrentUserProfileClient(updates: { name?: string })
 export async function deleteCurrentUserAccountClient() {
   const supabase = createClient()
   return deleteCurrentUserAccount(supabase)
+}
+
+// Interview Questions client functions
+export async function fetchInterviewQuestionsClient(interviewId: string): Promise<any[]> {
+  console.log("fetchInterviewQuestionsClient called with interviewId:", interviewId)
+  const supabase = createClient()
+  console.log("Supabase client created for fetch interview questions")
+  const result = await fetchInterviewQuestions(supabase, interviewId)
+  console.log("fetchInterviewQuestions result:", result)
+  return result
+}
+
+export async function createInterviewQuestionClient(params: {
+  interview_id: string
+  question_text: string
+  comment?: string
+}): Promise<any> {
+  console.log("createInterviewQuestionClient called with params:", params)
+  const supabase = createClient()
+  console.log("Supabase client created for create interview question")
+  const result = await createInterviewQuestion(supabase, params)
+  console.log("createInterviewQuestion result:", result)
+  return result
+}
+
+export async function updateInterviewQuestionClient(
+  questionId: string,
+  updates: {
+    question_text?: string
+    comment?: string
+  }
+): Promise<any> {
+  console.log("updateInterviewQuestionClient called with questionId:", questionId, "updates:", updates)
+  const supabase = createClient()
+  console.log("Supabase client created for update interview question")
+  const result = await updateInterviewQuestion(supabase, questionId, updates)
+  console.log("updateInterviewQuestion result:", result)
+  return result
+}
+
+export async function deleteInterviewQuestionClient(questionId: string): Promise<void> {
+  console.log("deleteInterviewQuestionClient called with questionId:", questionId)
+  const supabase = createClient()
+  console.log("Supabase client created for delete interview question")
+  await deleteInterviewQuestion(supabase, questionId)
+  console.log("deleteInterviewQuestion completed")
+}
+
+// Generate question using AI
+export async function generateQuestionClient(interviewId: string, comment?: string): Promise<any> {
+  console.log("generateQuestionClient called with interviewId:", interviewId, "comment:", comment)
+  
+  const response = await fetch('/api/ai/question', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      interviewId,
+      comment
+    }),
+  })
+
+  if (!response.ok) {
+    const errorData = await response.json()
+    throw new Error(errorData.error || 'Failed to generate question')
+  }
+
+  const result = await response.json()
+  console.log("generateQuestion result:", result)
+  console.log("Question object:", result.question)
+  console.log("Question text length:", result.question?.question_text?.length || 0)
+  return result.question
+}
+
+// Generate answer using AI
+export async function generateAnswerClient(interviewId: string, questionId: string, comment?: string): Promise<any> {
+  console.log("generateAnswerClient called with interviewId:", interviewId, "questionId:", questionId, "comment:", comment)
+  
+  const response = await fetch('/api/ai/answer', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      interviewId,
+      questionId,
+      comment
+    }),
+  })
+
+  if (!response.ok) {
+    const errorData = await response.json()
+    throw new Error(errorData.error || 'Failed to generate answer')
+  }
+
+  const result = await response.json()
+  console.log("generateAnswer result:", result)
+  console.log("Answer object:", result.answer)
+  console.log("Answer text length:", result.answer?.answer_text?.length || 0)
+  return result.answer
+}
+
+// Interview Answers client functions
+export async function fetchInterviewAnswersClient(interviewId: string): Promise<any[]> {
+  console.log("fetchInterviewAnswersClient called with interviewId:", interviewId)
+  const supabase = createClient()
+  console.log("Supabase client created for fetch interview answers")
+  const result = await fetchInterviewAnswers(supabase, interviewId)
+  console.log("fetchInterviewAnswers result:", result)
+  return result
+}
+
+export async function createInterviewAnswerClient(params: {
+  interview_id: string
+  question_id: string
+  answer_text: string
+  comment?: string
+}): Promise<any> {
+  console.log("createInterviewAnswerClient called with params:", params)
+  const supabase = createClient()
+  console.log("Supabase client created for create interview answer")
+  const result = await createInterviewAnswer(supabase, params)
+  console.log("createInterviewAnswer result:", result)
+  return result
+}
+
+export async function updateInterviewAnswerClient(
+  answerId: string,
+  updates: {
+    answer_text?: string
+    comment?: string
+  }
+): Promise<any> {
+  console.log("updateInterviewAnswerClient called with answerId:", answerId, "updates:", updates)
+  const supabase = createClient()
+  console.log("Supabase client created for update interview answer")
+  const result = await updateInterviewAnswer(supabase, answerId, updates)
+  console.log("updateInterviewAnswer result:", result)
+  return result
+}
+
+export async function deleteInterviewAnswerClient(answerId: string): Promise<void> {
+  console.log("deleteInterviewAnswerClient called with answerId:", answerId)
+  const supabase = createClient()
+  console.log("Supabase client created for delete interview answer")
+  await deleteInterviewAnswer(supabase, answerId)
+  console.log("deleteInterviewAnswer completed")
 }

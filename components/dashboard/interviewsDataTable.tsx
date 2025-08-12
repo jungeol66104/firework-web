@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Interview } from "@/utils/types"
-import createTestColumns from "@/components/dashboard/interviewColumns"
+import createTestColumns from "@/components/dashboard/interviewsColumns"
 import { deleteInterviewClient } from "@/utils/supabase/services/clientServices"
 
 interface InterviewDataTableProps {

@@ -5,12 +5,33 @@ export interface Interview {
   position: string
   job_posting: string
   cover_letter: string
+  resume: string
   company_info: string
   expected_questions: string
   company_evaluation: string
+  other: string
   created_at: string
   updated_at: string
   user_id: string
+}
+
+export interface InterviewQuestion {
+  id: string
+  interview_id: string
+  question_text: string
+  comment: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface InterviewAnswer {
+  id: string
+  interview_id: string
+  question_id: string
+  answer_text: string
+  comment: string | null
+  created_at: string
+  updated_at: string
 }
 
 export interface Profile {
@@ -44,8 +65,10 @@ export interface CreateInterviewParams {
   position?: string
   job_posting?: string
   cover_letter?: string
+  resume?: string
   company_info?: string
   expected_questions?: string
   company_evaluation?: string
+  other?: string
   user_id: string
 }

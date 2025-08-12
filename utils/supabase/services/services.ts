@@ -326,3 +326,154 @@ export async function deleteCurrentUserAccount(supabase: SupabaseClient): Promis
     throw new Error('User data deleted but account deletion requires admin privileges. Please contact support to complete account deletion.')
   }
 }
+
+// Interview Questions service functions
+export async function fetchInterviewQuestions(
+  supabase: SupabaseClient,
+  interviewId: string
+): Promise<any[]> {
+  const { data, error } = await supabase
+    .from('interview_questions')
+    .select('*')
+    .eq('interview_id', interviewId)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    throw new Error(`Failed to fetch interview questions: ${error.message}`)
+  }
+
+  return data || []
+}
+
+export async function createInterviewQuestion(
+  supabase: SupabaseClient,
+  params: {
+    interview_id: string
+    question_text: string
+    comment?: string
+  }
+): Promise<any> {
+  const { data, error } = await supabase
+    .from('interview_questions')
+    .insert([params])
+    .select()
+    .single()
+
+  if (error) {
+    throw new Error(`Failed to create interview question: ${error.message}`)
+  }
+
+  return data
+}
+
+export async function updateInterviewQuestion(
+  supabase: SupabaseClient,
+  questionId: string,
+  updates: {
+    question_text?: string
+    comment?: string
+  }
+): Promise<any> {
+  const { data, error } = await supabase
+    .from('interview_questions')
+    .update(updates)
+    .eq('id', questionId)
+    .select()
+    .single()
+
+  if (error) {
+    throw new Error(`Failed to update interview question: ${error.message}`)
+  }
+
+  return data
+}
+
+export async function deleteInterviewQuestion(
+  supabase: SupabaseClient,
+  questionId: string
+): Promise<void> {
+  const { error } = await supabase
+    .from('interview_questions')
+    .delete()
+    .eq('id', questionId)
+
+  if (error) {
+    throw new Error(`Failed to delete interview question: ${error.message}`)
+  }
+}
+
+// Interview Answers service functions
+export async function fetchInterviewAnswers(
+  supabase: SupabaseClient,
+  interviewId: string
+): Promise<any[]> {
+  const { data, error } = await supabase
+    .from('interview_answers')
+    .select('*')
+    .eq('interview_id', interviewId)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    throw new Error(`Failed to fetch interview answers: ${error.message}`)
+  }
+
+  return data || []
+}
+
+export async function createInterviewAnswer(
+  supabase: SupabaseClient,
+  params: {
+    interview_id: string
+    question_id: string
+    answer_text: string
+    comment?: string
+  }
+): Promise<any> {
+  const { data, error } = await supabase
+    .from('interview_answers')
+    .insert([params])
+    .select()
+    .single()
+
+  if (error) {
+    throw new Error(`Failed to create interview answer: ${error.message}`)
+  }
+
+  return data
+}
+
+export async function updateInterviewAnswer(
+  supabase: SupabaseClient,
+  answerId: string,
+  updates: {
+    answer_text?: string
+    comment?: string
+  }
+): Promise<any> {
+  const { data, error } = await supabase
+    .from('interview_answers')
+    .update(updates)
+    .eq('id', answerId)
+    .select()
+    .single()
+
+  if (error) {
+    throw new Error(`Failed to update interview answer: ${error.message}`)
+  }
+
+  return data
+}
+
+export async function deleteInterviewAnswer(
+  supabase: SupabaseClient,
+  answerId: string
+): Promise<void> {
+  const { error } = await supabase
+    .from('interview_answers')
+    .delete()
+    .eq('id', answerId)
+
+  if (error) {
+    throw new Error(`Failed to delete interview answer: ${error.message}`)
+  }
+}

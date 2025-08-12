@@ -11,6 +11,9 @@ import { useParams } from "next/navigation"
 import React from "react"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { Hexagon } from "lucide-react"
+import { QuestionDataTable } from "./questionsDataTable"
+import { useCurrentQuestion, useQuestionsLoading, useStore } from "@/utils/zustand"
+import { generateQuestionClient, fetchInterviewQuestionsClient, deleteInterviewQuestionClient } from "@/utils/supabase/services/clientServices"
 
 const formSchema = z.object({
   comment: z.string().optional(),
@@ -22,11 +25,25 @@ interface QuestionsSectionProps {
   showNavigation?: boolean
 }
 
+// Define the Question type for the history table
+interface QuestionHistory {
+  id: string
+  question: string
+  created_at: string
+}
+
 export default function QuestionsSection({ showNavigation = true }: QuestionsSectionProps) {
   const { interviewId } = useParams()
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [question, setQuestion] = useState("")
-  const [loadingQuestion, setLoadingQuestion] = useState(true)
+  
+  // Get state from Zustand store
+  const currentQuestion = useCurrentQuestion()
+  const loadingQuestion = useQuestionsLoading()
+  const setCurrentQuestion = useStore((state) => state.setCurrentQuestion)
+  const setQuestionsLoading = useStore((state) => state.setQuestionsLoading)
+  
+  const [historyData, setHistoryData] = useState<QuestionHistory[]>([])
+  const [loadingHistory, setLoadingHistory] = useState(false)
   
   // Chances counter (dummy - resets on page refresh)
   const [chancesLeft, setChancesLeft] = useState(1) // Start with 1 chance for questions
@@ -41,25 +58,80 @@ export default function QuestionsSection({ showNavigation = true }: QuestionsSec
     },
   })
 
-  // Fetch AI-generated question on mount
+  // Fetch the first question from database on mount
   React.useEffect(() => {
-    async function fetchQuestion() {
-      setLoadingQuestion(true)
+    async function fetchFirstQuestion() {
+      setQuestionsLoading(true)
       try {
-        // TODO: Replace with your actual API call
-        // Example: const res = await fetch(`/api/ai-question?userId=${userId}`)
-        // const data = await res.json()
-        // setQuestion(data.question)
-        await new Promise((r) => setTimeout(r, 500)) // mock delay
-        setQuestion("이곳에 AI가 생성한 질문이 표시됩니다")
+        const questions = await fetchInterviewQuestionsClient(interviewId as string)
+        
+        if (questions && questions.length > 0) {
+          // Get the first question (most recent due to DESC order)
+          const firstQuestion = questions[0]
+          setCurrentQuestion(firstQuestion.question_text)
+        } else {
+          setCurrentQuestion("기본 정보의 필수 항목을 저장한 후 질문을 생성해주세요")
+        }
       } catch (e) {
-        setQuestion("질문을 불러오지 못했습니다")
+        console.error("Failed to fetch first question:", e)
+        setCurrentQuestion("질문을 불러오지 못했습니다")
       } finally {
-        setLoadingQuestion(false)
+        setQuestionsLoading(false)
       }
     }
-    fetchQuestion()
-  }, [interviewId])
+    fetchFirstQuestion()
+  }, [interviewId, setCurrentQuestion, setQuestionsLoading])
+
+  // Fetch history data on mount
+  React.useEffect(() => {
+    fetchHistoryData()
+  }, [])
+
+  const fetchHistoryData = async () => {
+    setLoadingHistory(true)
+    try {
+      const questions = await fetchInterviewQuestionsClient(interviewId as string)
+      setHistoryData(questions.map(q => ({
+        id: q.id,
+        question: q.question_text,
+        created_at: q.created_at
+      })))
+    } catch (e) {
+      console.error("Failed to fetch history:", e)
+      setHistoryData([])
+    } finally {
+      setLoadingHistory(false)
+    }
+  }
+
+  const handleDeleteQuestion = async (id: string) => {
+    try {
+      await deleteInterviewQuestionClient(id)
+      console.log("Question deleted:", id)
+      
+      // Check if the deleted question was the current one
+      const questions = await fetchInterviewQuestionsClient(interviewId as string)
+      if (questions && questions.length > 0) {
+        // Update with the first available question
+        setCurrentQuestion(questions[0].question_text)
+      } else {
+        // No questions left, show placeholder
+        setCurrentQuestion("기본 정보의 필수 항목을 저장한 후 질문을 생성해주세요")
+      }
+      
+      // Refresh the history data
+      fetchHistoryData()
+    } catch (error) {
+      console.error("Failed to delete question:", error)
+      throw error
+    }
+  }
+
+  const handleSetCurrentQuestion = (question: string) => {
+    setCurrentQuestion(question)
+    // Show a toast notification
+    alert("질문이 현재 질문으로 설정되었습니다!")
+  }
 
   const handleGenerate = () => {
     if (chancesLeft <= 0) {
@@ -67,14 +139,35 @@ export default function QuestionsSection({ showNavigation = true }: QuestionsSec
       return
     }
 
-    setPendingAction(() => () => {
+    setPendingAction(() => async () => {
       setIsSubmitting(true)
-      // Simulate API call
-      setTimeout(() => {
+      try {
+        const comment = form.getValues("comment")
+        console.log("Generating question with comment:", comment)
+        const generatedQuestion = await generateQuestionClient(interviewId as string, comment)
+        
+        console.log("Generated question object:", generatedQuestion)
+        console.log("Question text:", generatedQuestion.question_text)
+        
+        // Update the current question with the generated one
+        setCurrentQuestion(generatedQuestion.question_text)
+        
+        // Clear the comment form
+        form.reset({ comment: "" })
+        
+        // Decrease chances
         setChancesLeft(prev => prev - 1)
-        setIsSubmitting(false)
+        
+        // Refresh history
+        fetchHistoryData()
+        
         alert("질문이 성공적으로 생성되었습니다!")
-      }, 1000)
+      } catch (error) {
+        console.error("Failed to generate question:", error)
+        alert("질문 생성에 실패했습니다. 다시 시도해주세요.")
+      } finally {
+        setIsSubmitting(false)
+      }
     })
     setShowConfirmationDialog(true)
   }
@@ -100,13 +193,28 @@ export default function QuestionsSection({ showNavigation = true }: QuestionsSec
 
   return (
     <div id="questions" className="w-full max-w-4xl p-8">
-        <h1 className="text-2xl font-bold mb-4">면접 질문</h1>
-        <div className="mb-4">
-          <label className="block font-medium mb-1">질문</label>
+        <div className="flex justify-between items-center mb-4">
+          <h1 className="text-2xl font-bold">면접 질문</h1>
+        </div>
+
+        {/* History Table */}
+        <div className="mb-4 flex flex-col gap-2">
+          <QuestionDataTable
+            data={historyData}
+            setData={setHistoryData}
+            isLoading={loadingHistory}
+            onDelete={handleDeleteQuestion}
+            onSetCurrent={handleSetCurrentQuestion}
+          />
+        </div>
+
+        <div className="mb-4 flex flex-col gap-2">
+          <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">질문</label>
           <Textarea
-            value={loadingQuestion ? "질문을 불러오는 중..." : question}
+            value={loadingQuestion ? "질문을 불러오는 중..." : currentQuestion}
             disabled
-            className="min-h-[100px] bg-zinc-100 text-zinc-700"
+            className="min-h-[200px] bg-zinc-100 text-zinc-700 whitespace-pre-wrap"
+            placeholder="기본 정보의 필수 항목을 저장한 후 질문을 생성해주세요"
           />
         </div>
         <Form {...form}>
@@ -120,7 +228,7 @@ export default function QuestionsSection({ showNavigation = true }: QuestionsSec
                     <FormLabel>코멘트</FormLabel>
                     <FormControl>
                       <Textarea
-                        placeholder="코멘트를 입력하세요"
+                        placeholder="질문 생성 시 참고할 코멘트를 입력하세요 (선택사항)"
                         className="min-h-[100px]"
                         {...field}
                       />

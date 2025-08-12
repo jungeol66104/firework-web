@@ -1,6 +1,6 @@
-import AnswersSection from "@/components/interviews/answersSection"
+import AnswersSection from "@/components/interviews/answers/answersSection"
 import InformationSection from "@/components/interviews/informationSection"
-import QuestionsSection from "@/components/interviews/questionsSection"
+import QuestionsSection from "@/components/interviews/questions/questionsSection"
 import TableOfContents from "@/components/interviews/tableOfContents"
 import { fetchInterviewByIdServer } from "@/utils/supabase/services/serverServices"
 import { createClient } from "@/utils/supabase/clients/server"
