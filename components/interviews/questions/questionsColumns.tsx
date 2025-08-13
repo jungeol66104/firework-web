@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { useState } from "react"
-import { toast } from "sonner"
 
 // Define the Question type for the history table
 interface QuestionHistory {
@@ -13,7 +12,7 @@ interface QuestionHistory {
   created_at: string
 }
 
-const createQuestionColumns = (onDelete?: (id: string) => Promise<void>, onSetCurrent?: (question: string) => void): ColumnDef<QuestionHistory>[] => [
+const createQuestionColumns = (onDelete?: (id: string) => Promise<void>, onSetCurrent?: (question: string, questionId: string) => void): ColumnDef<QuestionHistory>[] => [
   {
     accessorKey: "index",
     header: () => "",
@@ -44,16 +43,6 @@ const createQuestionColumns = (onDelete?: (id: string) => Promise<void>, onSetCu
       const item = row.original
       const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
 
-      const copyToClipboard = async (text: string) => {
-        try {
-          await navigator.clipboard.writeText(text)
-          toast.success("질문이 클립보드에 복사되었습니다")
-        } catch (err) {
-          console.error("Failed to copy:", err)
-          toast.error("질문 복사에 실패했습니다")
-        }
-      }
-
       const handleDelete = async () => {
         if (onDelete) {
           try {
@@ -81,26 +70,6 @@ const createQuestionColumns = (onDelete?: (id: string) => Promise<void>, onSetCu
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem 
-                onClick={(e) => {
-                  e.stopPropagation()
-                  copyToClipboard(item.question)
-                }}
-                className="cursor-pointer"
-              >
-                복사
-              </DropdownMenuItem>
-              {onSetCurrent && (
-                <DropdownMenuItem 
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onSetCurrent(item.question)
-                  }}
-                  className="cursor-pointer"
-                >
-                  현재 질문으로 설정
-                </DropdownMenuItem>
-              )}
               <DropdownMenuItem 
                 onClick={(e) => {
                   e.stopPropagation()

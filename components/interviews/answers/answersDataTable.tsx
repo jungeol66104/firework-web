@@ -86,7 +86,17 @@ export function AnswerDataTable({
                     <TableRow 
                       key={row.id} 
                       data-state={row.getIsSelected() && "selected"}
-                      className="hover:bg-muted/50 transition-colors"
+                      className="hover:bg-muted/50 transition-colors cursor-pointer"
+                      onClick={(e) => {
+                        // Don't trigger row click if clicking on actions cell
+                        const target = e.target as HTMLElement
+                        if (target.closest('[data-actions-cell="true"]')) {
+                          return
+                        }
+                        if (onSetCurrent) {
+                          onSetCurrent(row.original.answer)
+                        }
+                      }}
                     >
                       {row.getVisibleCells().map((cell) => (
                         <TableCell 

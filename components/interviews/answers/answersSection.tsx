@@ -47,13 +47,13 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
   // Get state from Zustand store
   const currentAnswer = useCurrentAnswer()
   const loadingAnswer = useAnswersLoading()
+  const currentQuestionId = useStore((state) => state.currentQuestionId)
   const setCurrentAnswer = useStore((state) => state.setCurrentAnswer)
   const setAnswersLoading = useStore((state) => state.setAnswersLoading)
   
   const [historyData, setHistoryData] = useState<AnswerHistory[]>([])
   const [loadingHistory, setLoadingHistory] = useState(false)
   const [questions, setQuestions] = useState<Question[]>([])
-  const [currentQuestionId, setCurrentQuestionId] = useState<string>('')
   
   // Chances counter (dummy - resets on page refresh)
   const [chancesLeft, setChancesLeft] = useState(2) // Start with 2 chances for answers
@@ -81,20 +81,8 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
           created_at: q.created_at
         })))
         
-        // Set the first question as current if available
-        if (questionsData.length > 0) {
-          setCurrentQuestionId(questionsData[0].id)
-        }
-        
-        // Fetch answers
-        const answers = await fetchInterviewAnswersClient(interviewId as string)
-        if (answers && answers.length > 0) {
-          // Get the first answer (most recent due to DESC order)
-          const firstAnswer = answers[0]
-          setCurrentAnswer(firstAnswer.answer_text)
-        } else {
-          setCurrentAnswer("질문을 선택한 후 답변을 생성할 수 있습니다")
-        }
+        // Don't set a default answer here - it will be set when a question is selected
+        setCurrentAnswer("질문을 선택한 후 답변을 생성할 수 있습니다")
       } catch (e) {
         console.error("Failed to fetch questions and answers:", e)
         setCurrentAnswer("답변을 불러오지 못했습니다")
@@ -105,13 +93,6 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
     fetchQuestionsAndAnswer()
   }, [interviewId, setCurrentAnswer, setAnswersLoading])
 
-  // Update current question ID when questions change
-  React.useEffect(() => {
-    if (questions.length > 0 && !currentQuestionId) {
-      setCurrentQuestionId(questions[0].id)
-    }
-  }, [questions, currentQuestionId])
-
   // Refresh history when current question changes
   React.useEffect(() => {
     if (currentQuestionId) {
@@ -119,57 +100,47 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
     }
   }, [currentQuestionId])
 
-  // Function to get current question ID from questions section
-  const getCurrentQuestionId = () => {
-    // For now, we'll use the first question as the current one
-    // In a real implementation, you might want to get this from a shared state or URL parameter
-    return questions.length > 0 ? questions[0].id : ''
-  }
-
-  // Fetch history data on mount
+  // Handle initial load when there's already a current question ID
   React.useEffect(() => {
-    fetchHistoryData()
-  }, [])
+    if (currentQuestionId && historyData.length === 0) {
+      fetchHistoryData()
+    }
+  }, [currentQuestionId, historyData.length])
 
   const fetchHistoryData = async () => {
     setLoadingHistory(true)
     try {
       const answers = await fetchInterviewAnswersClient(interviewId as string)
       // Filter answers to only show those related to the current question
-      const currentQId = getCurrentQuestionId()
-      const filteredAnswers = answers.filter(a => a.question_id === currentQId)
+      const filteredAnswers = answers.filter(a => a.question_id === currentQuestionId)
       setHistoryData(filteredAnswers.map(a => ({
         id: a.id,
         answer: a.answer_text,
         created_at: a.created_at,
         question_id: a.question_id
       })))
+      
+      // Set the current answer based on the first answer for this question
+      if (filteredAnswers.length > 0) {
+        setCurrentAnswer(filteredAnswers[0].answer_text)
+      } else {
+        setCurrentAnswer("질문을 선택한 후 답변을 생성할 수 있습니다")
+      }
     } catch (e) {
       console.error("Failed to fetch history:", e)
       setHistoryData([])
+      setCurrentAnswer("답변을 불러오지 못했습니다")
     } finally {
       setLoadingHistory(false)
     }
   }
-
-
 
   const handleDeleteAnswer = async (id: string) => {
     try {
       await deleteInterviewAnswerClient(id)
       console.log("Answer deleted:", id)
       
-      // Check if the deleted answer was the current one
-      const answers = await fetchInterviewAnswersClient(interviewId as string)
-      if (answers && answers.length > 0) {
-        // Update with the first available answer
-        setCurrentAnswer(answers[0].answer_text)
-      } else {
-        // No answers left, show placeholder
-        setCurrentAnswer("질문을 선택한 후 답변을 생성할 수 있습니다")
-      }
-      
-      // Refresh the history data
+      // Refresh the history data which will also update the current answer
       fetchHistoryData()
     } catch (error) {
       console.error("Failed to delete answer:", error)
@@ -179,13 +150,10 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
 
   const handleSetCurrentAnswer = (answer: string) => {
     setCurrentAnswer(answer)
-    // Show a toast notification
-    alert("답변이 현재 답변으로 설정되었습니다!")
   }
 
   const handleGenerate = () => {
-    const currentQId = getCurrentQuestionId()
-    if (!currentQId) {
+    if (!currentQuestionId) {
       alert("질문을 먼저 선택해주세요!")
       return
     }
@@ -200,7 +168,7 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
       try {
         const comment = form.getValues("comment")
         console.log("Generating answer with comment:", comment)
-        const generatedAnswer = await generateAnswerClient(interviewId as string, currentQId, comment)
+        const generatedAnswer = await generateAnswerClient(interviewId as string, currentQuestionId, comment)
         
         console.log("Generated answer object:", generatedAnswer)
         console.log("Answer text:", generatedAnswer.answer_text)
@@ -271,7 +239,11 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
         <Textarea
           value={loadingAnswer ? "답변을 불러오는 중..." : currentAnswer}
           disabled
-          className="min-h-[200px] bg-zinc-100 text-zinc-700 whitespace-pre-wrap"
+          className={`min-h-[200px] whitespace-pre-wrap ${
+            currentAnswer && currentAnswer !== "질문을 선택한 후 답변을 생성할 수 있습니다" && currentAnswer !== "답변을 불러오지 못했습니다"
+              ? "bg-white !text-black"
+              : "bg-zinc-100 text-zinc-700"
+          }`}
         />
       </div>
       <Form {...form}>
@@ -287,7 +259,7 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
                       <Textarea
                         placeholder="답변 생성 시 참고할 코멘트를 입력하세요 (선택사항)"
                         className="min-h-[100px]"
-                        disabled={!getCurrentQuestionId()}
+                        disabled={!currentQuestionId}
                         {...field}
                       />
                     </FormControl>
@@ -326,7 +298,7 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
                 </div>
                 <Button
                   type="button"
-                  disabled={isSubmitting || !getCurrentQuestionId()}
+                  disabled={isSubmitting || !currentQuestionId}
                   className="px-8 py-2 bg-black text-white hover:bg-zinc-800 disabled:bg-gray-400"
                   onClick={handleGenerate}
                 >

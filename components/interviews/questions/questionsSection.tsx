@@ -40,6 +40,7 @@ export default function QuestionsSection({ showNavigation = true }: QuestionsSec
   const currentQuestion = useCurrentQuestion()
   const loadingQuestion = useQuestionsLoading()
   const setCurrentQuestion = useStore((state) => state.setCurrentQuestion)
+  const setCurrentQuestionId = useStore((state) => state.setCurrentQuestionId)
   const setQuestionsLoading = useStore((state) => state.setQuestionsLoading)
   
   const [historyData, setHistoryData] = useState<QuestionHistory[]>([])
@@ -69,18 +70,21 @@ export default function QuestionsSection({ showNavigation = true }: QuestionsSec
           // Get the first question (most recent due to DESC order)
           const firstQuestion = questions[0]
           setCurrentQuestion(firstQuestion.question_text)
+          setCurrentQuestionId(firstQuestion.id)
         } else {
           setCurrentQuestion("기본 정보의 필수 항목을 저장한 후 질문을 생성해주세요")
+          setCurrentQuestionId("")
         }
       } catch (e) {
         console.error("Failed to fetch first question:", e)
         setCurrentQuestion("질문을 불러오지 못했습니다")
+        setCurrentQuestionId("")
       } finally {
         setQuestionsLoading(false)
       }
     }
     fetchFirstQuestion()
-  }, [interviewId, setCurrentQuestion, setQuestionsLoading])
+  }, [interviewId, setCurrentQuestion, setCurrentQuestionId, setQuestionsLoading])
 
   // Fetch history data on mount
   React.useEffect(() => {
@@ -114,9 +118,11 @@ export default function QuestionsSection({ showNavigation = true }: QuestionsSec
       if (questions && questions.length > 0) {
         // Update with the first available question
         setCurrentQuestion(questions[0].question_text)
+        setCurrentQuestionId(questions[0].id)
       } else {
         // No questions left, show placeholder
         setCurrentQuestion("기본 정보의 필수 항목을 저장한 후 질문을 생성해주세요")
+        setCurrentQuestionId("")
       }
       
       // Refresh the history data
@@ -127,10 +133,9 @@ export default function QuestionsSection({ showNavigation = true }: QuestionsSec
     }
   }
 
-  const handleSetCurrentQuestion = (question: string) => {
+  const handleSetCurrentQuestion = (question: string, questionId: string) => {
     setCurrentQuestion(question)
-    // Show a toast notification
-    alert("질문이 현재 질문으로 설정되었습니다!")
+    setCurrentQuestionId(questionId)
   }
 
   const handleGenerate = () => {
@@ -151,6 +156,7 @@ export default function QuestionsSection({ showNavigation = true }: QuestionsSec
         
         // Update the current question with the generated one
         setCurrentQuestion(generatedQuestion.question_text)
+        setCurrentQuestionId(generatedQuestion.id)
         
         // Clear the comment form
         form.reset({ comment: "" })
@@ -213,7 +219,11 @@ export default function QuestionsSection({ showNavigation = true }: QuestionsSec
           <Textarea
             value={loadingQuestion ? "질문을 불러오는 중..." : currentQuestion}
             disabled
-            className="min-h-[200px] bg-zinc-100 text-zinc-700 whitespace-pre-wrap"
+            className={`min-h-[200px] whitespace-pre-wrap ${
+              currentQuestion && currentQuestion !== "기본 정보의 필수 항목을 저장한 후 질문을 생성해주세요" && currentQuestion !== "질문을 불러오지 못했습니다"
+                ? "bg-white !text-black"
+                : "bg-zinc-100 text-zinc-700"
+            }`}
             placeholder="기본 정보의 필수 항목을 저장한 후 질문을 생성해주세요"
           />
         </div>

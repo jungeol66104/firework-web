@@ -5,7 +5,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Interview } from "@/utils/types"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { useState } from "react"
-import { toast } from "sonner"
 
 const createColumns = (router: any, onDelete?: (id: string) => Promise<void>): ColumnDef<Interview>[] => [
   {
@@ -40,16 +39,6 @@ const createColumns = (router: any, onDelete?: (id: string) => Promise<void>): C
       const item = row.original
       const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
 
-      const copyToClipboard = async (text: string) => {
-        try {
-          await navigator.clipboard.writeText(text)
-          toast.success("링크가 클립보드에 복사되었습니다")
-        } catch (err) {
-          console.error("Failed to copy:", err)
-          toast.error("링크 복사에 실패했습니다")
-        }
-      }
-
       const handleDelete = async () => {
         if (onDelete) {
           try {
@@ -77,15 +66,6 @@ const createColumns = (router: any, onDelete?: (id: string) => Promise<void>): C
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem 
-                onClick={(e) => {
-                  e.stopPropagation()
-                  copyToClipboard(`${window.location.origin}/${item.id}/interaction`)
-                }}
-                className="cursor-pointer"
-              >
-                링크 복사
-              </DropdownMenuItem>
               <DropdownMenuItem 
                 onClick={(e) => {
                   e.stopPropagation()

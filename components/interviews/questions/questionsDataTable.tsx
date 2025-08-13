@@ -18,7 +18,7 @@ interface QuestionDataTableProps {
   setData: React.Dispatch<React.SetStateAction<QuestionHistory[]>>
   isLoading: boolean
   onDelete?: (id: string) => Promise<void>
-  onSetCurrent?: (question: string) => void
+  onSetCurrent?: (question: string, questionId: string) => void
 }
 
 export function QuestionDataTable({ 
@@ -85,7 +85,17 @@ export function QuestionDataTable({
                     <TableRow 
                       key={row.id} 
                       data-state={row.getIsSelected() && "selected"}
-                      className="hover:bg-muted/50 transition-colors"
+                      className="hover:bg-muted/50 transition-colors cursor-pointer"
+                      onClick={(e) => {
+                        // Don't trigger row click if clicking on actions cell
+                        const target = e.target as HTMLElement
+                        if (target.closest('[data-actions-cell="true"]')) {
+                          return
+                        }
+                        if (onSetCurrent) {
+                          onSetCurrent(row.original.question, row.original.id)
+                        }
+                      }}
                     >
                       {row.getVisibleCells().map((cell) => (
                         <TableCell 

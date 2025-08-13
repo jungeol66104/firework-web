@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { devtools } from 'zustand/middleware'
+import { devtools, persist } from 'zustand/middleware'
 import { createInterviewSlice, InterviewSlice } from './slices/interviewSlice'
 import { createQuestionsSlice, QuestionsSlice } from './slices/questionsSlice'
 import { createAnswersSlice, AnswersSlice } from './slices/answersSlice'
@@ -10,11 +10,25 @@ interface Store extends InterviewSlice, QuestionsSlice, AnswersSlice {}
 // Create the main store
 export const useStore = create<Store>()(
   devtools(
-    (set, get) => ({
-      ...createInterviewSlice(set, get),
-      ...createQuestionsSlice(set, get),
-      ...createAnswersSlice(set, get),
-    }),
+    persist(
+      (set, get) => ({
+        ...createInterviewSlice(set, get),
+        ...createQuestionsSlice(set, get),
+        ...createAnswersSlice(set, get),
+      }),
+      {
+        name: 'interview-store',
+        // Only persist interviews data, not loading states
+        partialize: (state) => ({
+          interviews: state.interviews,
+          currentInterview: state.currentInterview,
+          questions: state.questions,
+          currentQuestion: state.currentQuestion,
+          answers: state.answers,
+          currentAnswer: state.currentAnswer,
+        }),
+      }
+    ),
     {
       name: 'interview-store',
     }

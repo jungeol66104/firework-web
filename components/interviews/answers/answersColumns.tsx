@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { useState } from "react"
-import { toast } from "sonner"
 
 // Define the Answer type for the history table
 interface AnswerHistory {
@@ -44,16 +43,6 @@ const createAnswerColumns = (onDelete?: (id: string) => Promise<void>, onSetCurr
       const item = row.original
       const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
 
-      const copyToClipboard = async (text: string) => {
-        try {
-          await navigator.clipboard.writeText(text)
-          toast.success("답변이 클립보드에 복사되었습니다")
-        } catch (err) {
-          console.error("Failed to copy:", err)
-          toast.error("답변 복사에 실패했습니다")
-        }
-      }
-
       const handleDelete = async () => {
         if (onDelete) {
           try {
@@ -81,26 +70,6 @@ const createAnswerColumns = (onDelete?: (id: string) => Promise<void>, onSetCurr
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem 
-                onClick={(e) => {
-                  e.stopPropagation()
-                  copyToClipboard(item.answer)
-                }}
-                className="cursor-pointer"
-              >
-                복사
-              </DropdownMenuItem>
-              <DropdownMenuItem 
-                onClick={(e) => {
-                  e.stopPropagation()
-                  if (onSetCurrent) {
-                    onSetCurrent(item.answer)
-                  }
-                }}
-                className="cursor-pointer"
-              >
-                현재 답변으로 설정
-              </DropdownMenuItem>
               <DropdownMenuItem 
                 onClick={(e) => {
                   e.stopPropagation()

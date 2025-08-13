@@ -3,6 +3,7 @@ import { InterviewQuestion } from '@/utils/types'
 export interface QuestionsSlice {
   questions: InterviewQuestion[]
   currentQuestion: string // Generated question content (not saved yet)
+  currentQuestionId: string // ID of the currently selected question
   isLoadingQuestions: boolean
   isLoadingQuestionGeneration: boolean
   
@@ -12,6 +13,7 @@ export interface QuestionsSlice {
   removeQuestion: (id: string) => void
   updateQuestion: (id: string, updates: Partial<InterviewQuestion>) => void
   setCurrentQuestion: (question: string) => void
+  setCurrentQuestionId: (id: string) => void
   setQuestionsLoading: (loading: boolean) => void
   setQuestionGenerationLoading: (loading: boolean) => void
   resetQuestions: () => void
@@ -20,6 +22,7 @@ export interface QuestionsSlice {
 export const createQuestionsSlice = (set: any, get: any): QuestionsSlice => ({
   questions: [],
   currentQuestion: '',
+  currentQuestionId: '',
   isLoadingQuestions: false,
   isLoadingQuestionGeneration: false,
   
@@ -36,11 +39,13 @@ export const createQuestionsSlice = (set: any, get: any): QuestionsSlice => ({
     )
   })),
   setCurrentQuestion: (question) => set({ currentQuestion: question }),
+  setCurrentQuestionId: (id) => set({ currentQuestionId: id }),
   setQuestionsLoading: (loading) => set({ isLoadingQuestions: loading }),
   setQuestionGenerationLoading: (loading) => set({ isLoadingQuestionGeneration: loading }),
   resetQuestions: () => set({ 
     questions: [], 
     currentQuestion: '', 
+    currentQuestionId: '',
     isLoadingQuestions: false,
     isLoadingQuestionGeneration: false
   }),

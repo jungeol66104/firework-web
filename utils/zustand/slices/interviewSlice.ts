@@ -18,7 +18,7 @@ export interface InterviewSlice {
 export const createInterviewSlice = (set: any, get: any): InterviewSlice => ({
   currentInterview: null,
   interviews: [],
-  isLoading: true,
+  isLoading: false,
   
   setCurrentInterview: (interview) => set({ currentInterview: interview }),
   setInterviews: (interviews) => set({ interviews }),
@@ -43,6 +43,6 @@ export const createInterviewSlice = (set: any, get: any): InterviewSlice => ({
   reset: () => set({ 
     currentInterview: null, 
     interviews: [], 
-    isLoading: true 
+    isLoading: false 
   }),
 })
