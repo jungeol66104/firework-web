@@ -15,13 +15,26 @@ export interface Interview {
   user_id: string
 }
 
+export interface InterviewQuestionData {
+  general_personality: string[]
+  cover_letter_personality: string[]
+  cover_letter_competency: string[]
+}
+
 export interface InterviewQuestion {
   id: string
   interview_id: string
   question_text: string
+  question_data: InterviewQuestionData | null
   comment: string | null
   created_at: string
   updated_at: string
+}
+
+export interface InterviewAnswerData {
+  general_personality: string[]
+  cover_letter_personality: string[]
+  cover_letter_competency: string[]
 }
 
 export interface InterviewAnswer {
@@ -29,6 +42,7 @@ export interface InterviewAnswer {
   interview_id: string
   question_id: string
   answer_text: string
+  answer_data: InterviewAnswerData | null
   comment: string | null
   created_at: string
   updated_at: string

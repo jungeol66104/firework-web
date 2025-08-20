@@ -349,7 +349,7 @@ export async function createInterviewQuestion(
   supabase: SupabaseClient,
   params: {
     interview_id: string
-    question_text: string
+    question_data: any
     comment?: string
   }
 ): Promise<any> {
@@ -370,7 +370,7 @@ export async function updateInterviewQuestion(
   supabase: SupabaseClient,
   questionId: string,
   updates: {
-    question_text?: string
+    question_data?: any
     comment?: string
   }
 ): Promise<any> {
@@ -425,7 +425,7 @@ export async function createInterviewAnswer(
   params: {
     interview_id: string
     question_id: string
-    answer_text: string
+    answer_data: any
     comment?: string
   }
 ): Promise<any> {
@@ -446,7 +446,7 @@ export async function updateInterviewAnswer(
   supabase: SupabaseClient,
   answerId: string,
   updates: {
-    answer_text?: string
+    answer_data?: any
     comment?: string
   }
 ): Promise<any> {

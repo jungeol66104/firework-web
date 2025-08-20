@@ -1,5 +1,6 @@
 import { createClient } from '../clients/server'
 import { fetchInterviews, fetchInterviewById, createProfile, fetchProfileById, updateProfile, fetchUserInterviews, getCurrentUserInterviews, deleteInterview, searchInterviewsByCandidateName, getCurrentUser, checkInterviewOwnership, updateInterview, getCurrentUserProfile, updateCurrentUserProfile, deleteCurrentUserAccount, fetchInterviewQuestions } from './services'
+import { getUserTokens } from './tokenService'
 import { FetchInterviewsParams, FetchInterviewsResult, CreateProfileParams, Profile, Interview } from '@/utils/types'
 
 export async function fetchInterviewsServer(params: FetchInterviewsParams = {}): Promise<FetchInterviewsResult> {
@@ -120,4 +121,16 @@ export async function deleteCurrentUserAccountServer() {
 export async function fetchInterviewQuestionsServer(interviewId: string) {
   const supabase = await createClient()
   return fetchInterviewQuestions(supabase, interviewId)
+}
+
+// Token server services
+export async function getUserTokensServer(): Promise<number> {
+  const supabase = await createClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  
+  if (authError || !user) {
+    return 0
+  }
+  
+  return getUserTokens(supabase, user.id)
 }

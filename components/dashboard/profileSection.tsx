@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { AlertCircle, Loader2, LogOut } from "lucide-react"
+import { AlertCircle, Loader2, LogOut, Hexagon } from "lucide-react"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
@@ -16,9 +16,10 @@ import { deleteUserAccount, signout } from "@/app/auth/actions"
 interface ProfileSectionProps {
   userName: string
   userEmail?: string
+  tokens: number
 }
 
-export default function ProfileSection({ userName, userEmail }: ProfileSectionProps) {
+export default function ProfileSection({ userName, userEmail, tokens }: ProfileSectionProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [name, setName] = useState(userName)
   const [email, setEmail] = useState(userEmail || "")
@@ -138,6 +139,30 @@ export default function ProfileSection({ userName, userEmail }: ProfileSectionPr
             <Label htmlFor="email">이메일</Label>
             <div className="text-foreground dark:bg-input/30 flex items-center h-9 w-full min-w-0 rounded-md bg-transparent py-1 text-base transition-[color,box-shadow] outline-none md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50">
               <span className="text-sm text-gray-600">{email || "이메일이 설정되지 않았습니다"}</span>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="tokens">남은 토큰</Label>
+            <div className="text-foreground dark:bg-input/30 flex items-center justify-between h-9 w-full min-w-0 rounded-md bg-transparent py-1 text-base transition-[color,box-shadow] outline-none md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50">
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <Hexagon className="w-6 h-6 text-blue-600" />
+                  <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-blue-600">
+                    J
+                  </span>
+                </div>
+                <span className="text-sm text-gray-600">{tokens.toLocaleString()}</span>
+              </div>
+              <Button 
+                size="sm"
+                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 text-sm"
+                onClick={() => {
+                  // TODO: Open payment modal or navigate to payment page
+                  console.log('충전하기 clicked')
+                }}
+              >
+                충전하기
+              </Button>
             </div>
           </div>
           {isEditing && (

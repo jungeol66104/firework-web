@@ -10,6 +10,7 @@ import createAnswerColumns from "./answersColumns"
 interface AnswerHistory {
   id: string
   answer: string
+  answer_data?: any
   created_at: string
   question_id: string
 }
@@ -19,7 +20,8 @@ interface AnswerDataTableProps {
   setData: React.Dispatch<React.SetStateAction<AnswerHistory[]>>
   isLoading: boolean
   onDelete?: (id: string) => Promise<void>
-  onSetCurrent?: (answer: string) => void
+  onSetCurrent?: (answer: string, answerId: string, answerData?: any) => void
+  currentAnswerId?: string
 }
 
 export function AnswerDataTable({ 
@@ -27,7 +29,8 @@ export function AnswerDataTable({
   setData, 
   isLoading,
   onDelete,
-  onSetCurrent
+  onSetCurrent,
+  currentAnswerId
 }: AnswerDataTableProps) {
   const handleDelete = async (id: string) => {
     if (onDelete) {
@@ -42,7 +45,7 @@ export function AnswerDataTable({
   }
 
   // Create columns with delete handler
-  const columns = createAnswerColumns(handleDelete, onSetCurrent)
+  const columns = createAnswerColumns(handleDelete, onSetCurrent, currentAnswerId)
   
   // Create table instance
   const table = useReactTable({ 
@@ -86,7 +89,11 @@ export function AnswerDataTable({
                     <TableRow 
                       key={row.id} 
                       data-state={row.getIsSelected() && "selected"}
-                      className="hover:bg-muted/50 transition-colors cursor-pointer"
+                      className={`transition-colors cursor-pointer ${
+                        currentAnswerId === row.original.id 
+                          ? "bg-blue-50 hover:bg-blue-100 border-blue-200" 
+                          : "hover:bg-muted/50"
+                      }`}
                       onClick={(e) => {
                         // Don't trigger row click if clicking on actions cell
                         const target = e.target as HTMLElement
@@ -94,7 +101,7 @@ export function AnswerDataTable({
                           return
                         }
                         if (onSetCurrent) {
-                          onSetCurrent(row.original.answer)
+                          onSetCurrent(row.original.answer, row.original.id, row.original.answer_data)
                         }
                       }}
                     >

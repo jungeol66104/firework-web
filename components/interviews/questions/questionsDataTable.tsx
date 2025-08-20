@@ -19,6 +19,7 @@ interface QuestionDataTableProps {
   isLoading: boolean
   onDelete?: (id: string) => Promise<void>
   onSetCurrent?: (question: string, questionId: string) => void
+  currentQuestionId?: string
 }
 
 export function QuestionDataTable({ 
@@ -26,7 +27,8 @@ export function QuestionDataTable({
   setData, 
   isLoading,
   onDelete,
-  onSetCurrent
+  onSetCurrent,
+  currentQuestionId
 }: QuestionDataTableProps) {
   const handleDelete = async (id: string) => {
     if (onDelete) {
@@ -85,7 +87,11 @@ export function QuestionDataTable({
                     <TableRow 
                       key={row.id} 
                       data-state={row.getIsSelected() && "selected"}
-                      className="hover:bg-muted/50 transition-colors cursor-pointer"
+                      className={`transition-colors cursor-pointer ${
+                        currentQuestionId === row.original.id 
+                          ? "bg-blue-50 hover:bg-blue-100 border-blue-200" 
+                          : "hover:bg-muted/50"
+                      }`}
                       onClick={(e) => {
                         // Don't trigger row click if clicking on actions cell
                         const target = e.target as HTMLElement

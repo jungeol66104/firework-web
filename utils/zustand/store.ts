@@ -3,9 +3,10 @@ import { devtools, persist } from 'zustand/middleware'
 import { createInterviewSlice, InterviewSlice } from './slices/interviewSlice'
 import { createQuestionsSlice, QuestionsSlice } from './slices/questionsSlice'
 import { createAnswersSlice, AnswersSlice } from './slices/answersSlice'
+import { createTokenSlice, TokenSlice } from './slices/tokenSlice'
 
 // Combined store type
-interface Store extends InterviewSlice, QuestionsSlice, AnswersSlice {}
+interface Store extends InterviewSlice, QuestionsSlice, AnswersSlice, TokenSlice {}
 
 // Create the main store
 export const useStore = create<Store>()(
@@ -15,6 +16,7 @@ export const useStore = create<Store>()(
         ...createInterviewSlice(set, get),
         ...createQuestionsSlice(set, get),
         ...createAnswersSlice(set, get),
+        ...createTokenSlice(set, get),
       }),
       {
         name: 'interview-store',
@@ -26,6 +28,8 @@ export const useStore = create<Store>()(
           currentQuestion: state.currentQuestion,
           answers: state.answers,
           currentAnswer: state.currentAnswer,
+          tokens: state.tokens,
+          lastFetched: state.lastFetched,
         }),
       }
     ),
@@ -44,6 +48,7 @@ export const useInterviewLoading = () => useStore((state) => state.isLoading)
 // Questions selectors
 export const useQuestions = () => useStore((state) => state.questions)
 export const useCurrentQuestion = () => useStore((state) => state.currentQuestion)
+export const useCurrentQuestionId = () => useStore((state) => state.currentQuestionId)
 export const useQuestionsLoading = () => useStore((state) => state.isLoadingQuestions)
 export const useQuestionGenerationLoading = () => useStore((state) => state.isLoadingQuestionGeneration)
 
@@ -52,6 +57,12 @@ export const useAnswers = () => useStore((state) => state.answers)
 export const useCurrentAnswer = () => useStore((state) => state.currentAnswer)
 export const useAnswersLoading = () => useStore((state) => state.isLoadingAnswers)
 export const useAnswerGenerationLoading = () => useStore((state) => state.isLoadingAnswerGeneration)
+
+// Token selectors
+export const useTokens = () => useStore((state) => state.tokens)
+export const useTokensLoading = () => useStore((state) => state.isLoadingTokens)
+export const useRefreshTokens = () => useStore((state) => state.refreshTokens)
+export const useDecrementTokens = () => useStore((state) => state.decrementTokens)
 
 
 

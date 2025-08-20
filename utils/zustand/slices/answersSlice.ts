@@ -3,6 +3,7 @@ import { InterviewAnswer } from '@/utils/types'
 export interface AnswersSlice {
   answers: InterviewAnswer[]
   currentAnswer: string // Generated answer content (not saved yet)
+  currentAnswerId: string // ID of selected answer for regeneration
   isLoadingAnswers: boolean
   isLoadingAnswerGeneration: boolean
   
@@ -12,6 +13,7 @@ export interface AnswersSlice {
   removeAnswer: (id: string) => void
   updateAnswer: (id: string, updates: Partial<InterviewAnswer>) => void
   setCurrentAnswer: (answer: string) => void
+  setCurrentAnswerId: (id: string) => void
   setAnswersLoading: (loading: boolean) => void
   setAnswerGenerationLoading: (loading: boolean) => void
   resetAnswers: () => void
@@ -20,6 +22,7 @@ export interface AnswersSlice {
 export const createAnswersSlice = (set: any, get: any): AnswersSlice => ({
   answers: [],
   currentAnswer: '',
+  currentAnswerId: '',
   isLoadingAnswers: false,
   isLoadingAnswerGeneration: false,
   
@@ -36,11 +39,13 @@ export const createAnswersSlice = (set: any, get: any): AnswersSlice => ({
     )
   })),
   setCurrentAnswer: (answer) => set({ currentAnswer: answer }),
+  setCurrentAnswerId: (id) => set({ currentAnswerId: id }),
   setAnswersLoading: (loading) => set({ isLoadingAnswers: loading }),
   setAnswerGenerationLoading: (loading) => set({ isLoadingAnswerGeneration: loading }),
   resetAnswers: () => set({ 
     answers: [], 
     currentAnswer: '', 
+    currentAnswerId: '',
     isLoadingAnswers: false,
     isLoadingAnswerGeneration: false
   }),

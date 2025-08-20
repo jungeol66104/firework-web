@@ -10,10 +10,11 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useParams } from "next/navigation"
 import React from "react"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
-import { Hexagon, History } from "lucide-react"
+import { Hexagon, Loader } from "lucide-react"
+import { toast } from "sonner"
 import { AnswerDataTable } from "./answersDataTable"
-import { useCurrentAnswer, useAnswersLoading, useStore } from "@/utils/zustand"
-import { generateAnswerClient, fetchInterviewAnswersClient, deleteInterviewAnswerClient, fetchInterviewQuestionsClient } from "@/utils/supabase/services/clientServices"
+import { useCurrentAnswer, useAnswersLoading, useStore, useDecrementTokens } from "@/utils/zustand"
+import { generateAnswerClient, fetchInterviewAnswersClient, deleteInterviewAnswerClient, fetchInterviewQuestionsClient, getUserTokensClient } from "@/utils/supabase/services/clientServices"
 
 const formSchema = z.object({
   comment: z.string().optional(),
@@ -29,6 +30,7 @@ interface AnswersSectionProps {
 interface AnswerHistory {
   id: string
   answer: string
+  answer_data?: any
   created_at: string
   question_id: string
 }
@@ -40,6 +42,79 @@ interface Question {
   created_at: string
 }
 
+// Helper function to format answer_data into HTML (matching questions format)
+const formatAnswerDataAsHTML = (answerData: any): React.ReactNode => {
+  if (!answerData || typeof answerData !== 'object') {
+    return <div className="text-gray-500">유효하지 않은 답변 데이터입니다</div>
+  }
+
+  const { general_personality, cover_letter_personality, cover_letter_competency } = answerData
+  
+  if (!Array.isArray(general_personality) || !Array.isArray(cover_letter_personality) || !Array.isArray(cover_letter_competency)) {
+    return <div className="text-gray-500">답변 데이터 형식이 올바르지 않습니다</div>
+  }
+
+  return (
+    <div className="text-black">
+      <div className="mb-10">
+        <h3 className="font-bold text-sm mb-3">일반 인성면접 답변 (10개)</h3>
+        <div className="space-y-2 pl-4">
+          {general_personality.map((a, i) => (
+            <div key={i} className="flex text-sm leading-relaxed">
+              <span className="w-6 flex-shrink-0">{i + 1}.</span>
+              <span className="flex-1 whitespace-pre-wrap">{a}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      
+      <div className="mb-10">
+        <h3 className="font-bold text-sm mb-3">자기소개서 기반 인성면접 답변 (10개)</h3>
+        <div className="space-y-2 pl-4">
+          {cover_letter_personality.map((a, i) => (
+            <div key={i} className="flex text-sm leading-relaxed">
+              <span className="w-6 flex-shrink-0">{i + 1}.</span>
+              <span className="flex-1 whitespace-pre-wrap">{a}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      
+      <div className="mb-0">
+        <h3 className="font-bold text-sm mb-3">자기소개서 기반 직무 역량 확인 답변 (10개)</h3>
+        <div className="space-y-2 pl-4">
+          {cover_letter_competency.map((a, i) => (
+            <div key={i} className="flex text-sm leading-relaxed">
+              <span className="w-6 flex-shrink-0">{i + 1}.</span>
+              <span className="flex-1 whitespace-pre-wrap">{a}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+
+// Helper function to get 2nd + 3rd answers for history table display
+const getSecondAndThirdAnswers = (answerData: any): string => {
+  if (!answerData || typeof answerData !== 'object') {
+    return "답변 데이터 없음"
+  }
+  
+  const { general_personality } = answerData
+  
+  if (!Array.isArray(general_personality) || general_personality.length < 3) {
+    return "답변 데이터 부족"
+  }
+  
+  // Get 2nd answer (index 1) + space + 3rd answer (index 2)
+  const secondAnswer = general_personality[1] || ""
+  const thirdAnswer = general_personality[2] || ""
+  
+  return `${secondAnswer} ${thirdAnswer}`
+}
+
 export default function AnswersSection({ showNavigation = true }: AnswersSectionProps) {
   const { interviewId } = useParams()
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -48,17 +123,26 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
   const currentAnswer = useCurrentAnswer()
   const loadingAnswer = useAnswersLoading()
   const currentQuestionId = useStore((state) => state.currentQuestionId)
+  const currentAnswerId = useStore((state) => state.currentAnswerId)
   const setCurrentAnswer = useStore((state) => state.setCurrentAnswer)
+  const setCurrentAnswerId = useStore((state) => state.setCurrentAnswerId)
   const setAnswersLoading = useStore((state) => state.setAnswersLoading)
+  
+  // Local state for current answer data (JSON format)
+  const [currentAnswerData, setCurrentAnswerData] = useState<any>(null)
+  
+  // State for the currently selected question data
+  const [currentQuestionData, setCurrentQuestionData] = useState<any>(null)
   
   const [historyData, setHistoryData] = useState<AnswerHistory[]>([])
   const [loadingHistory, setLoadingHistory] = useState(false)
   const [questions, setQuestions] = useState<Question[]>([])
   
-  // Chances counter (dummy - resets on page refresh)
-  const [chancesLeft, setChancesLeft] = useState(2) // Start with 2 chances for answers
+  // Global token state
+  const decrementTokens = useDecrementTokens()
   const [showConfirmationDialog, setShowConfirmationDialog] = useState(false)
   const [showPaymentDialog, setShowPaymentDialog] = useState(false)
+  const [showLoadingDialog, setShowLoadingDialog] = useState(false)
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null)
 
   const form = useForm<{ comment?: string }>({
@@ -68,34 +152,91 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
     },
   })
 
-  // Fetch questions and first answer on mount
-  React.useEffect(() => {
-    async function fetchQuestionsAndAnswer() {
-      setAnswersLoading(true)
-      try {
-        // Fetch questions first
-        const questionsData = await fetchInterviewQuestionsClient(interviewId as string)
-        setQuestions(questionsData.map(q => ({
-          id: q.id,
-          question_text: q.question_text,
-          created_at: q.created_at
-        })))
-        
-        // Don't set a default answer here - it will be set when a question is selected
-        setCurrentAnswer("질문을 선택한 후 답변을 생성할 수 있습니다")
-      } catch (e) {
-        console.error("Failed to fetch questions and answers:", e)
-        setCurrentAnswer("답변을 불러오지 못했습니다")
-      } finally {
-        setAnswersLoading(false)
-      }
+  // Helper function to format selected question and answer pair together
+  const formatSelectedQuestionAndAnswer = (questionData: any, answerData: any): React.ReactNode => {
+    if (!questionData && !answerData) {
+      return <div className="text-gray-500">질문과 답변을 선택해주세요</div>
     }
-    fetchQuestionsAndAnswer()
-  }, [interviewId, setCurrentAnswer, setAnswersLoading])
 
-  // Refresh history when current question changes
+    if (!questionData) {
+      return <div className="text-gray-500">질문 데이터가 없습니다</div>
+    }
+
+    const renderQuestionAnswerPairs = (questions: string[], answers: string[], title: string) => {
+      
+      return (
+        <div>
+          <h3 className="font-bold text-sm mb-3">{title}</h3>
+          <div className="space-y-4 pl-4">
+            {questions?.map((q: string, i: number) => (
+              <div key={i} className="space-y-1">
+                <div className="flex text-sm">
+                  <span className="w-6 flex-shrink-0">{i + 1}.</span>
+                  <span className="flex-1">{q}</span>
+                </div>
+                {answers && answers[i] ? (
+                  <div className="flex text-sm leading-relaxed text-black ml-10 pl-2">
+                    <span className="flex-1 whitespace-pre-wrap">{answers[i]}</span>
+                  </div>
+                ) : (
+                  <div className="flex text-sm leading-relaxed text-gray-500 ml-10 pl-2">
+                    <span className="flex-1">답변이 없습니다</span>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )
+    }
+
+    return (
+      <div className="text-black">
+        <div className="mb-10">
+          {renderQuestionAnswerPairs(
+            questionData.general_personality,
+            answerData?.general_personality,
+            "일반 인성면접 질문 (10개)"
+          )}
+        </div>
+        
+        <div className="mb-10">
+          {renderQuestionAnswerPairs(
+            questionData.cover_letter_personality,
+            answerData?.cover_letter_personality,
+            "자기소개서 기반 인성면접 질문 (10개)"
+          )}
+        </div>
+        
+        <div className="mb-0">
+          {renderQuestionAnswerPairs(
+            questionData.cover_letter_competency,
+            answerData?.cover_letter_competency,
+            "자기소개서 기반 직무 역량 확인 질문 (10개)"
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // Initialize with empty state - nothing selected
+  React.useEffect(() => {
+    setCurrentAnswer("")
+    setCurrentAnswerId("")
+    setCurrentAnswerData(null)
+    setAnswersLoading(false)
+  }, [interviewId, setCurrentAnswer, setCurrentAnswerId, setAnswersLoading])
+
+  // Remove local token fetching - now handled by global state
+
+  // Refresh history when current question changes and clear current answer
   React.useEffect(() => {
     if (currentQuestionId) {
+      // Clear current answer selection when switching questions
+      setCurrentAnswerId("")
+      setCurrentAnswer("")
+      setCurrentAnswerData(null)
+      
       fetchHistoryData()
     }
   }, [currentQuestionId])
@@ -107,40 +248,81 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
     }
   }, [currentQuestionId, historyData.length])
 
+
   const fetchHistoryData = async () => {
     setLoadingHistory(true)
     try {
       const answers = await fetchInterviewAnswersClient(interviewId as string)
+      
       // Filter answers to only show those related to the current question
       const filteredAnswers = answers.filter(a => a.question_id === currentQuestionId)
+      
       setHistoryData(filteredAnswers.map(a => ({
         id: a.id,
-        answer: a.answer_text,
+        answer: a.answer_data ? getSecondAndThirdAnswers(a.answer_data) : (a.answer_text || "답변 없음"),
+        answer_data: a.answer_data,
         created_at: a.created_at,
         question_id: a.question_id
       })))
       
-      // Set the current answer based on the first answer for this question
-      if (filteredAnswers.length > 0) {
-        setCurrentAnswer(filteredAnswers[0].answer_text)
-      } else {
-        setCurrentAnswer("질문을 선택한 후 답변을 생성할 수 있습니다")
+      // Don't auto-select any answer - user must click to select
+
+      // Also fetch the current question data if we have a currentQuestionId
+      if (currentQuestionId) {
+        try {
+          const questions = await fetchInterviewQuestionsClient(interviewId as string)
+          const currentQuestion = questions.find(q => q.id === currentQuestionId)
+          if (currentQuestion?.question_data) {
+            setCurrentQuestionData(currentQuestion.question_data)
+          } else {
+            setCurrentQuestionData(null)
+          }
+        } catch (qError) {
+          console.error("Failed to fetch current question:", qError)
+          setCurrentQuestionData(null)
+        }
       }
     } catch (e) {
       console.error("Failed to fetch history:", e)
       setHistoryData([])
+      setCurrentAnswerData(null)
       setCurrentAnswer("답변을 불러오지 못했습니다")
     } finally {
       setLoadingHistory(false)
     }
   }
 
+
   const handleDeleteAnswer = async (id: string) => {
     try {
       await deleteInterviewAnswerClient(id)
       console.log("Answer deleted:", id)
       
-      // Refresh the history data which will also update the current answer
+      // Check if the deleted answer was the current one
+      if (currentAnswerId === id) {
+        const answers = await fetchInterviewAnswersClient(interviewId as string)
+        const filteredAnswers = answers.filter(a => a.question_id === currentQuestionId)
+        
+        if (filteredAnswers.length > 0) {
+          // Update with the first available answer
+          const firstAnswer = filteredAnswers[0]
+          if (firstAnswer.answer_data) {
+            setCurrentAnswerData(firstAnswer.answer_data)
+            setCurrentAnswer("") // Will be rendered as HTML
+          } else {
+            setCurrentAnswerData(null)
+            setCurrentAnswer(firstAnswer.answer_text || "답변 데이터를 찾을 수 없습니다")
+          }
+          setCurrentAnswerId(firstAnswer.id)
+        } else {
+          // No answers left, show placeholder
+          setCurrentAnswerData(null)
+          setCurrentAnswer("질문을 선택한 후 답변을 생성할 수 있습니다")
+          setCurrentAnswerId("")
+        }
+      }
+      
+      // Refresh the history data
       fetchHistoryData()
     } catch (error) {
       console.error("Failed to delete answer:", error)
@@ -148,47 +330,78 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
     }
   }
 
-  const handleSetCurrentAnswer = (answer: string) => {
-    setCurrentAnswer(answer)
+  const handleSetCurrentAnswer = (answer: string, answerId: string, answerData?: any) => {
+    // If clicking on the already selected answer, unselect it
+    if (currentAnswerId === answerId) {
+      setCurrentAnswer("")
+      setCurrentAnswerId("")
+      setCurrentAnswerData(null)
+      return
+    }
+
+    // Use answer_data (JSON) if available, otherwise fall back to answer text
+    if (answerData) {
+      setCurrentAnswerData(answerData)
+      setCurrentAnswer("") // Will be rendered as HTML
+    } else {
+      setCurrentAnswerData(null)
+      setCurrentAnswer(answer || "답변 데이터를 찾을 수 없습니다")
+    }
+    setCurrentAnswerId(answerId)
   }
 
   const handleGenerate = () => {
     if (!currentQuestionId) {
-      alert("질문을 먼저 선택해주세요!")
+      toast.error("질문을 먼저 선택해주세요!")
       return
     }
 
-    if (chancesLeft <= 0) {
-      setShowPaymentDialog(true)
-      return
-    }
+    // Token validation is handled by the API, but we can show payment dialog preemptively
+    // if tokens appear to be 0 (though we'll let API make final decision)
 
     setPendingAction(() => async () => {
       setIsSubmitting(true)
       try {
         const comment = form.getValues("comment")
-        console.log("Generating answer with comment:", comment)
-        const generatedAnswer = await generateAnswerClient(interviewId as string, currentQuestionId, comment)
+        console.log("Generating answer with comment:", comment, "answerId:", currentAnswerId)
+        const generatedAnswer = await generateAnswerClient(
+          interviewId as string, 
+          currentQuestionId, 
+          comment,
+          currentAnswerId || undefined  // Pass answerId for regeneration mode
+        )
         
         console.log("Generated answer object:", generatedAnswer)
-        console.log("Answer text:", generatedAnswer.answer_text)
+        console.log("Answer data:", generatedAnswer.answer_data)
         
         // Update the current answer with the generated one
-        setCurrentAnswer(generatedAnswer.answer_text)
+        if (generatedAnswer.answer_data) {
+          setCurrentAnswerData(generatedAnswer.answer_data)
+          setCurrentAnswer("") // Will be rendered as HTML
+        } else {
+          setCurrentAnswerData(null)
+          setCurrentAnswer(generatedAnswer.answer_text || "답변을 불러올 수 없습니다")
+        }
+        setCurrentAnswerId(generatedAnswer.id)
         
         // Clear the comment form
         form.reset({ comment: "" })
         
-        // Decrease chances
-        setChancesLeft(prev => prev - 1)
-        
-        // Refresh history
+        // Update global token state and refresh history
+        decrementTokens(2)
         fetchHistoryData()
         
-        alert("답변이 성공적으로 생성되었습니다!")
-      } catch (error) {
+        toast.success("답변이 성공적으로 생성되었습니다!")
+      } catch (error: any) {
         console.error("Failed to generate answer:", error)
-        alert("답변 생성에 실패했습니다. 다시 시도해주세요.")
+        
+        // Check if it's a token insufficient error
+        if (error.message && error.message.includes('Insufficient tokens')) {
+          toast.error("토큰이 부족합니다. 토큰을 구매해주세요.")
+          setShowPaymentDialog(true)
+        } else {
+          toast.error("답변 생성에 실패했습니다. 다시 시도해주세요.")
+        }
       } finally {
         setIsSubmitting(false)
       }
@@ -198,20 +411,28 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
 
   const onSubmit = async (data: { comment?: string }) => {
     console.log("코멘트 폼 데이터:", data)
-    alert("코멘트가 성공적으로 제출되었습니다!")
+    toast.success("코멘트가 성공적으로 제출되었습니다!")
   }
 
-  const handleConfirmGenerate = () => {
+  const handleConfirmGenerate = async () => {
     setShowConfirmationDialog(false)
+    setShowLoadingDialog(true)
+    
     if (pendingAction) {
-      pendingAction()
-      setPendingAction(null)
+      try {
+        await pendingAction()
+      } catch (error) {
+        console.error('Error during generation:', error)
+      } finally {
+        setShowLoadingDialog(false)
+        setPendingAction(null)
+      }
     }
   }
 
   const handlePaymentConfirm = () => {
     setShowPaymentDialog(false)
-    alert("결제 페이지로 이동합니다...")
+    toast.info("결제 페이지로 이동합니다...")
     // TODO: Redirect to payment page
   }
 
@@ -229,84 +450,100 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
             isLoading={loadingHistory}
             onDelete={handleDeleteAnswer}
             onSetCurrent={handleSetCurrentAnswer}
+            currentAnswerId={currentAnswerId}
           />
         </div>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)}>
+            {currentAnswerId && (
+              <>
+                <div className="mb-4 flex flex-col gap-2">
+                  <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">질문과 답변</label>
+                  <div 
+                    className={`h-[600px] overflow-y-auto p-3 border border-gray-300 rounded-md ${
+                      (currentAnswerData || (currentAnswer && currentAnswer !== "답변을 선택하면 여기에 표시됩니다" && currentAnswer !== "답변을 불러오지 못했습니다"))
+                        ? "bg-white"
+                        : "bg-zinc-100"
+                    }`}
+                  >
+                    {loadingAnswer ? (
+                      <div className="text-gray-500">답변을 불러오는 중...</div>
+                    ) : (
+                      formatSelectedQuestionAndAnswer(currentQuestionData, currentAnswerData)
+                    )}
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="comment"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>코멘트</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder={currentAnswerId ? "선택한 답변에 코멘트를 반영하여 재생성합니다 (선택사항)" : "답변 생성 시 참고할 코멘트를 입력하세요 (선택사항)"}
+                            className="min-h-[100px]"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </>
+            )}
 
-      
+            {/* Alert when no question is selected and no answer is selected */}
+            {!currentQuestionId && !currentAnswerId && (
+              <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
+                <div className="text-blue-700 text-sm">
+                  질문을 선택하면 해당 질문에 대한 답변을 생성할 수 있습니다.
+                </div>
+              </div>
+            )}
 
-      <div className="mb-4 flex flex-col gap-2">
-        <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">답변</label>
-        <Textarea
-          value={loadingAnswer ? "답변을 불러오는 중..." : currentAnswer}
-          disabled
-          className={`min-h-[200px] whitespace-pre-wrap ${
-            currentAnswer && currentAnswer !== "질문을 선택한 후 답변을 생성할 수 있습니다" && currentAnswer !== "답변을 불러오지 못했습니다"
-              ? "bg-white !text-black"
-              : "bg-zinc-100 text-zinc-700"
-          }`}
-        />
-      </div>
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)}>
-          <div className="space-y-4">
-                          <FormField
-                control={form.control}
-                name="comment"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>코멘트</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="답변 생성 시 참고할 코멘트를 입력하세요 (선택사항)"
-                        className="min-h-[100px]"
-                        disabled={!currentQuestionId}
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-          </div>
-          <div className="sticky bottom-0 bg-white/40 backdrop-blur-sm px-8 py-3 mt-6 -mx-8">
-            <div className="flex justify-between items-center">
-              <div>
-                {showNavigation && (
+            {/* Show generate button always, but disable when no question is selected */}
+            <div className="sticky bottom-0 bg-white/40 backdrop-blur-sm px-8 py-3 mt-6 -mx-8">
+              <div className="flex justify-between items-center">
+                <div>
+                  {showNavigation && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="px-8 py-2"
+                      onClick={() => {
+                        window.location.href = `/${interviewId}/questions`
+                      }}
+                    >
+                      질문으로 이동
+                    </Button>
+                  )}
+                </div>
+                <div className="flex gap-3 items-center">
+                  <div className="flex items-center gap-2">
+                  <div className="relative">
+                <Hexagon className="w-6 h-6 text-blue-600" />
+                <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-blue-600">
+                  J
+                </span>
+              </div>
+                    <span className="text-sm text-gray-600">
+                      2 사용
+                    </span>
+                  </div>
                   <Button
                     type="button"
-                    variant="outline"
-                    className="px-8 py-2"
-                    onClick={() => {
-                      window.location.href = `/${interviewId}/questions`
-                    }}
+                    disabled={isSubmitting || !currentQuestionId}
+                    className="px-8 py-2 bg-black text-white hover:bg-zinc-800 disabled:bg-gray-400"
+                    onClick={handleGenerate}
                   >
-                    질문으로 이동
+                    {isSubmitting ? "생성 중..." : currentAnswerId ? "재생성" : "생성"}
                   </Button>
-                )}
-              </div>
-              <div className="flex gap-3 items-center">
-                <div className="flex items-center gap-2">
-                <div className="relative">
-              <Hexagon className="w-6 h-6 text-blue-600" />
-              <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-blue-600">
-                J
-              </span>
-            </div>
-                  <span className="text-sm text-gray-600">
-                    {chancesLeft}
-                  </span>
                 </div>
-                <Button
-                  type="button"
-                  disabled={isSubmitting || !currentQuestionId}
-                  className="px-8 py-2 bg-black text-white hover:bg-zinc-800 disabled:bg-gray-400"
-                  onClick={handleGenerate}
-                >
-                  {isSubmitting ? "생성 중..." : "생성"}
-                </Button>
               </div>
             </div>
-          </div>
         </form>
       </Form>
 
@@ -316,7 +553,7 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
           <AlertDialogHeader>
             <AlertDialogTitle>확인</AlertDialogTitle>
             <AlertDialogDescription>
-              1회가 차감됩니다. 진행하시겠습니까?
+              2 토큰이 차감됩니다. {currentAnswerId ? "선택한 답변을 재생성" : "새로운 답변을 생성"}하시겠습니까?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -343,6 +580,14 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
               결제하기
             </AlertDialogAction>
           </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Loading Dialog */}
+      <AlertDialog open={showLoadingDialog} onOpenChange={() => {}}>
+        <AlertDialogContent className="w-20 h-20 p-0 border-none shadow-lg bg-white flex items-center justify-center">
+          <AlertDialogTitle className="sr-only">답변 생성 중</AlertDialogTitle>
+          <Loader className="w-4 h-4 animate-spin text-gray-600" />
         </AlertDialogContent>
       </AlertDialog>
     </div>

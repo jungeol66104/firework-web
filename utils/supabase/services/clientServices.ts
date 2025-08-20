@@ -1,5 +1,6 @@
 import { createClient } from '../clients/client'
 import { createInterview, deleteInterview, searchInterviewsByCandidateName, fetchInterviewById, fetchInterviews, fetchUserInterviews, getCurrentUserInterviews, getCurrentUser, checkInterviewOwnership, updateInterview, getCurrentUserProfile, updateCurrentUserProfile, deleteCurrentUserAccount, fetchInterviewQuestions, createInterviewQuestion, updateInterviewQuestion, deleteInterviewQuestion, fetchInterviewAnswers, createInterviewAnswer, updateInterviewAnswer, deleteInterviewAnswer } from './services'
+import { getUserTokens } from './tokenService'
 import { CreateInterviewParams, Interview, FetchInterviewsParams, FetchInterviewsResult } from '@/utils/types'
 
 export async function createInterviewClient(
@@ -132,7 +133,7 @@ export async function fetchInterviewQuestionsClient(interviewId: string): Promis
 
 export async function createInterviewQuestionClient(params: {
   interview_id: string
-  question_text: string
+  question_data: any
   comment?: string
 }): Promise<any> {
   console.log("createInterviewQuestionClient called with params:", params)
@@ -146,7 +147,7 @@ export async function createInterviewQuestionClient(params: {
 export async function updateInterviewQuestionClient(
   questionId: string,
   updates: {
-    question_text?: string
+    question_data?: any
     comment?: string
   }
 ): Promise<any> {
@@ -167,8 +168,8 @@ export async function deleteInterviewQuestionClient(questionId: string): Promise
 }
 
 // Generate question using AI
-export async function generateQuestionClient(interviewId: string, comment?: string): Promise<any> {
-  console.log("generateQuestionClient called with interviewId:", interviewId, "comment:", comment)
+export async function generateQuestionClient(interviewId: string, comment?: string, questionId?: string): Promise<any> {
+  console.log("generateQuestionClient called with interviewId:", interviewId, "comment:", comment, "questionId:", questionId)
   
   const response = await fetch('/api/ai/question', {
     method: 'POST',
@@ -177,7 +178,8 @@ export async function generateQuestionClient(interviewId: string, comment?: stri
     },
     body: JSON.stringify({
       interviewId,
-      comment
+      comment,
+      questionId
     }),
   })
 
@@ -189,13 +191,12 @@ export async function generateQuestionClient(interviewId: string, comment?: stri
   const result = await response.json()
   console.log("generateQuestion result:", result)
   console.log("Question object:", result.question)
-  console.log("Question text length:", result.question?.question_text?.length || 0)
   return result.question
 }
 
 // Generate answer using AI
-export async function generateAnswerClient(interviewId: string, questionId: string, comment?: string): Promise<any> {
-  console.log("generateAnswerClient called with interviewId:", interviewId, "questionId:", questionId, "comment:", comment)
+export async function generateAnswerClient(interviewId: string, questionId: string, comment?: string, answerId?: string): Promise<any> {
+  console.log("generateAnswerClient called with interviewId:", interviewId, "questionId:", questionId, "comment:", comment, "answerId:", answerId)
   
   const response = await fetch('/api/ai/answer', {
     method: 'POST',
@@ -205,7 +206,8 @@ export async function generateAnswerClient(interviewId: string, questionId: stri
     body: JSON.stringify({
       interviewId,
       questionId,
-      comment
+      comment,
+      answerId
     }),
   })
 
@@ -217,7 +219,6 @@ export async function generateAnswerClient(interviewId: string, questionId: stri
   const result = await response.json()
   console.log("generateAnswer result:", result)
   console.log("Answer object:", result.answer)
-  console.log("Answer text length:", result.answer?.answer_text?.length || 0)
   return result.answer
 }
 
@@ -234,7 +235,7 @@ export async function fetchInterviewAnswersClient(interviewId: string): Promise<
 export async function createInterviewAnswerClient(params: {
   interview_id: string
   question_id: string
-  answer_text: string
+  answer_data: any
   comment?: string
 }): Promise<any> {
   console.log("createInterviewAnswerClient called with params:", params)
@@ -248,7 +249,7 @@ export async function createInterviewAnswerClient(params: {
 export async function updateInterviewAnswerClient(
   answerId: string,
   updates: {
-    answer_text?: string
+    answer_data?: any
     comment?: string
   }
 ): Promise<any> {
@@ -266,4 +267,20 @@ export async function deleteInterviewAnswerClient(answerId: string): Promise<voi
   console.log("Supabase client created for delete interview answer")
   await deleteInterviewAnswer(supabase, answerId)
   console.log("deleteInterviewAnswer completed")
+}
+
+// Token management client functions
+export async function getUserTokensClient(): Promise<number> {
+  console.log("getUserTokensClient called")
+  const supabase = createClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  
+  if (authError || !user) {
+    console.error("Failed to get user for token fetch:", authError)
+    return 0
+  }
+  
+  const tokens = await getUserTokens(supabase, user.id)
+  console.log("getUserTokens result:", tokens)
+  return tokens
 }

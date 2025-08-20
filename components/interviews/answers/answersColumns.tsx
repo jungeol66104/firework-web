@@ -9,11 +9,12 @@ import { useState } from "react"
 interface AnswerHistory {
   id: string
   answer: string
+  answer_data?: any
   created_at: string
   question_id: string
 }
 
-const createAnswerColumns = (onDelete?: (id: string) => Promise<void>, onSetCurrent?: (answer: string) => void): ColumnDef<AnswerHistory>[] => [
+const createAnswerColumns = (onDelete?: (id: string) => Promise<void>, onSetCurrent?: (answer: string, answerId: string, answerData?: any) => void, currentAnswerId?: string): ColumnDef<AnswerHistory>[] => [
   {
     accessorKey: "index",
     header: () => "",
@@ -24,7 +25,18 @@ const createAnswerColumns = (onDelete?: (id: string) => Promise<void>, onSetCurr
     header: () => <div>답변</div>,
     minSize: 200,
     maxSize: 200,
-    cell: ({ row }) => <div className="truncate">{row.getValue("answer")}</div>,
+    cell: ({ row }) => {
+      const item = row.original
+      const isSelected = currentAnswerId === item.id
+      return (
+        <div 
+          className="truncate cursor-pointer"
+          onClick={() => onSetCurrent && onSetCurrent(item.answer, item.id, item.answer_data)}
+        >
+          {item.answer || "답변 없음"}
+        </div>
+      )
+    },
   },
   {
     accessorKey: "created_at",

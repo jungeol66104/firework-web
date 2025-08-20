@@ -3,7 +3,9 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { Hexagon } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { getCurrentUserClient, getCurrentUserProfileClient } from "@/utils/supabase/services/clientServices";
+import { useTokens, useRefreshTokens } from "@/utils/zustand";
 import { User } from "@supabase/supabase-js";
 import { Profile } from "@/utils/types";
 
@@ -11,6 +13,10 @@ export const NavBar: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  
+  // Global token state
+  const tokens = useTokens();
+  const refreshTokens = useRefreshTokens();
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -21,6 +27,9 @@ export const NavBar: React.FC = () => {
         if (currentUser) {
           const userProfile = await getCurrentUserProfileClient();
           setProfile(userProfile);
+          
+          // Refresh tokens using global state
+          await refreshTokens();
         }
       } catch (error) {
         console.error("Error fetching user data:", error);
@@ -39,7 +48,7 @@ export const NavBar: React.FC = () => {
       <Link href="/dashboard" className="text-lg font-bold">정코치 면접 솔루션</Link>
       
       {!loading && user && profile && (
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-4">
           <span className="text-sm font-medium text-gray-700">
             {profile.name}님
           </span>
@@ -50,8 +59,18 @@ export const NavBar: React.FC = () => {
                 J
               </span>
             </div>
-            <span className="text-sm text-gray-600">1,000</span>
+            <span className="text-sm text-gray-600">{tokens.toLocaleString()}</span>
           </div>
+          <Button 
+            size="sm"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 text-sm"
+            onClick={() => {
+              // TODO: Open payment modal or navigate to payment page
+              console.log('충전하기 clicked')
+            }}
+          >
+            충전하기
+          </Button>
         </div>
       )}
     </div>

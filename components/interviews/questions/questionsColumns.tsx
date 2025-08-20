@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { useState } from "react"
+import { toast } from "sonner"
 
 // Define the Question type for the history table
 interface QuestionHistory {
@@ -51,7 +52,7 @@ const createQuestionColumns = (onDelete?: (id: string) => Promise<void>, onSetCu
             setIsDeleteDialogOpen(false)
           } catch (error) {
             console.error("Failed to delete question:", error)
-            alert("질문 삭제에 실패했습니다. 다시 시도해주세요.")
+            toast.error("질문 삭제에 실패했습니다. 다시 시도해주세요.")
           }
         }
       }
