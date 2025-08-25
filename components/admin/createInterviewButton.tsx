@@ -5,10 +5,10 @@ import {Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, Dia
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useState, useEffect } from "react"
-import { createInterviewClient } from "@/utils/supabase/services/clientServices"
-import { Interview } from "@/utils/types"
-import { cn } from "@/utils/utils"
-import { createClient } from "@/utils/supabase/clients/client"
+import { createInterviewClient } from "@/lib/supabase/services/clientServices"
+import { Interview } from "@/lib/types"
+import { cn } from "@/lib/utils"
+import { createClient } from "@/lib/supabase/clients/client"
 
 interface AdminCreateInterviewButtonProps {
   onInterviewCreated?: (interview: Interview) => void

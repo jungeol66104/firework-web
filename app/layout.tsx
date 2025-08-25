@@ -11,6 +11,7 @@ export default function RootLayout({children,}: Readonly<{children: React.ReactN
   const pathname = usePathname();
   const isAdminPage = pathname.startsWith("/admin");
   const isAuthPage = pathname.startsWith("/auth");
+  const isPaymentPage = pathname.startsWith("/payments");
 
   return (
     <>
@@ -19,7 +20,7 @@ export default function RootLayout({children,}: Readonly<{children: React.ReactN
         <body>
           <ThemeProvider attribute="class" defaultTheme="white" enableSystem disableTransitionOnChange>
             {isAdminPage && <AdminNavBar />}
-            {!isAdminPage && !isAuthPage && <NavBar />}
+            {!isAdminPage && !isAuthPage && !isPaymentPage && <NavBar />}
             {children}
             <Toaster position="top-right" />
           </ThemeProvider>

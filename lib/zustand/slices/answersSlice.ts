@@ -1,4 +1,4 @@
-import { InterviewAnswer } from '@/utils/types'
+import { InterviewAnswer } from '@/lib/types'
 
 export interface AnswersSlice {
   answers: InterviewAnswer[]

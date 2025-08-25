@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation"
-import { fetchInterviewByIdServer } from "@/utils/supabase/services/serverServices"
-import { createClient } from "@/utils/supabase/clients/server"
+import { fetchInterviewByIdServer } from "@/lib/supabase/services/serverServices"
+import { createClient } from "@/lib/supabase/clients/server"
 
 interface PageProps {
   params: Promise<{

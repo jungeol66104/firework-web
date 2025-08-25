@@ -1,7 +1,7 @@
 import { createClient } from '../clients/client'
 import { createInterview, deleteInterview, searchInterviewsByCandidateName, fetchInterviewById, fetchInterviews, fetchUserInterviews, getCurrentUserInterviews, getCurrentUser, checkInterviewOwnership, updateInterview, getCurrentUserProfile, updateCurrentUserProfile, deleteCurrentUserAccount, fetchInterviewQuestions, createInterviewQuestion, updateInterviewQuestion, deleteInterviewQuestion, fetchInterviewAnswers, createInterviewAnswer, updateInterviewAnswer, deleteInterviewAnswer } from './services'
 import { getUserTokens } from './tokenService'
-import { CreateInterviewParams, Interview, FetchInterviewsParams, FetchInterviewsResult } from '@/utils/types'
+import { CreateInterviewParams, Interview, FetchInterviewsParams, FetchInterviewsResult } from '@/lib/types'
 
 export async function createInterviewClient(
   params: CreateInterviewParams

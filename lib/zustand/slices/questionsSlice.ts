@@ -1,4 +1,4 @@
-import { InterviewQuestion } from '@/utils/types'
+import { InterviewQuestion } from '@/lib/types'
 
 export interface QuestionsSlice {
   questions: InterviewQuestion[]

@@ -13,8 +13,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Hexagon, Loader } from "lucide-react"
 import { toast } from "sonner"
 import { AnswerDataTable } from "./answersDataTable"
-import { useCurrentAnswer, useAnswersLoading, useStore, useDecrementTokens } from "@/utils/zustand"
-import { generateAnswerClient, fetchInterviewAnswersClient, deleteInterviewAnswerClient, fetchInterviewQuestionsClient, getUserTokensClient } from "@/utils/supabase/services/clientServices"
+import { useCurrentAnswer, useAnswersLoading, useStore, useDecrementTokens, useRefreshTokens } from "@/lib/zustand"
+import { generateAnswerClient, fetchInterviewAnswersClient, deleteInterviewAnswerClient, fetchInterviewQuestionsClient, getUserTokensClient } from "@/lib/supabase/services/clientServices"
 
 const formSchema = z.object({
   comment: z.string().optional(),
@@ -140,6 +140,7 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
   
   // Global token state
   const decrementTokens = useDecrementTokens()
+  const refreshTokens = useRefreshTokens()
   const [showConfirmationDialog, setShowConfirmationDialog] = useState(false)
   const [showPaymentDialog, setShowPaymentDialog] = useState(false)
   const [showLoadingDialog, setShowLoadingDialog] = useState(false)
@@ -356,8 +357,14 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
       return
     }
 
-    // Token validation is handled by the API, but we can show payment dialog preemptively
-    // if tokens appear to be 0 (though we'll let API make final decision)
+    // Get current token state from Zustand
+    const currentTokens = useStore.getState().tokens
+
+    // Check if user has enough tokens BEFORE showing confirmation dialog
+    if (currentTokens < 2) {
+      setShowPaymentDialog(true)
+      return
+    }
 
     setPendingAction(() => async () => {
       setIsSubmitting(true)
@@ -432,8 +439,25 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
 
   const handlePaymentConfirm = () => {
     setShowPaymentDialog(false)
-    toast.info("결제 페이지로 이동합니다...")
-    // TODO: Redirect to payment page
+    
+    const paymentWindow = window.open(
+      '/payments/checkout',
+      'payment',
+      'width=700,height=700,centerscreen=yes,resizable=no,scrollbars=no'
+    )
+    
+    if (!paymentWindow) {
+      alert('팝업이 차단되었습니다. 팝업을 허용하고 다시 시도해주세요.')
+      return
+    }
+    
+    // Monitor window closure and refresh tokens
+    const checkInterval = setInterval(() => {
+      if (paymentWindow.closed) {
+        clearInterval(checkInterval)
+        refreshTokens() // Refresh global token state
+      }
+    }, 1000)
   }
 
   return (
@@ -571,13 +595,13 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
           <AlertDialogHeader>
             <AlertDialogTitle>사용 횟수 소진</AlertDialogTitle>
             <AlertDialogDescription>
-              모든 사용 횟수를 소진했습니다. 다른 요금제로 결제하시겠습니까?
+              모든 사용 횟수를 소진했습니다. 토큰을 충전하시겠습니까?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>취소</AlertDialogCancel>
-            <AlertDialogAction onClick={handlePaymentConfirm}>
-              결제하기
+            <AlertDialogAction onClick={handlePaymentConfirm} className="bg-blue-600 hover:bg-blue-700">
+              충전하기
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

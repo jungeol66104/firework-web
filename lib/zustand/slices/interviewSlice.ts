@@ -1,4 +1,4 @@
-import { Interview } from '@/utils/types'
+import { Interview } from '@/lib/types'
 
 export interface InterviewSlice {
   currentInterview: Interview | null

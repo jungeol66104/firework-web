@@ -3,8 +3,8 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { fetchInterviewByIdClient } from "@/utils/supabase/services/clientServices";
-import { Interview } from "@/utils/types";
+import { fetchInterviewByIdClient } from "@/lib/supabase/services/clientServices";
+import { Interview } from "@/lib/types";
 
 export const AdminNavBar: React.FC = () => {
   const { interviewId } = useParams() as { interviewId?: string };

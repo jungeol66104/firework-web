@@ -1,6 +1,6 @@
 "use client"
 
-import { cn } from "@/utils/utils"
+import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -10,7 +10,7 @@ import { signin } from "@/app/auth/actions"
 import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { signinSchema, type SigninFormData } from "@/utils/validations"
+import { signinSchema, type SigninFormData } from "@/lib/validations"
 
 export function SigninForm({ className, ...props }: React.ComponentProps<"div">) {
   const [error, setError] = useState<string | null>(null)

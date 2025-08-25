@@ -4,10 +4,10 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { Hexagon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { getCurrentUserClient, getCurrentUserProfileClient } from "@/utils/supabase/services/clientServices";
-import { useTokens, useRefreshTokens } from "@/utils/zustand";
+import { getCurrentUserClient, getCurrentUserProfileClient } from "@/lib/supabase/services/clientServices";
+import { useTokens, useRefreshTokens } from "@/lib/zustand";
 import { User } from "@supabase/supabase-js";
-import { Profile } from "@/utils/types";
+import { Profile } from "@/lib/types";
 
 export const NavBar: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -49,9 +49,11 @@ export const NavBar: React.FC = () => {
       
       {!loading && user && profile && (
         <div className="flex items-center gap-4">
-          <span className="text-sm font-medium text-gray-700">
-            {profile.name}님
-          </span>
+          <Button variant="ghost" size="sm">
+            <span className="text-sm font-medium text-gray-700">
+              {profile.name}님
+            </span>
+          </Button>
           <div className="flex items-center gap-2">
             <div className="relative">
               <Hexagon className="w-6 h-6 text-blue-600" />
@@ -65,14 +67,31 @@ export const NavBar: React.FC = () => {
             size="sm"
             className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 text-sm"
             onClick={() => {
-              // TODO: Open payment modal or navigate to payment page
-              console.log('충전하기 clicked')
+              const paymentWindow = window.open(
+                '/payments/checkout',
+                'payment',
+                'width=700,height=700,centerscreen=yes,resizable=no,scrollbars=no'
+              )
+              
+              if (!paymentWindow) {
+                alert('팝업이 차단되었습니다. 팝업을 허용하고 다시 시도해주세요.')
+                return
+              }
+              
+              // Monitor window closure and refresh tokens
+              const checkInterval = setInterval(() => {
+                if (paymentWindow.closed) {
+                  clearInterval(checkInterval)
+                  refreshTokens() // Refresh global token state
+                }
+              }, 1000)
             }}
           >
             충전하기
           </Button>
         </div>
       )}
+
     </div>
   );
 }; 

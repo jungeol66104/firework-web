@@ -6,11 +6,11 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { AlertCircle, Loader2, LogOut, Hexagon } from "lucide-react"
+import { AlertCircle, Loader, LogOut, Hexagon } from "lucide-react"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { updateCurrentUserProfileClient } from "@/utils/supabase/services/clientServices"
+import { updateCurrentUserProfileClient } from "@/lib/supabase/services/clientServices"
 import { deleteUserAccount, signout } from "@/app/auth/actions"
 
 interface ProfileSectionProps {
@@ -107,7 +107,7 @@ export default function ProfileSection({ userName, userEmail, tokens }: ProfileS
             <Button size="sm" onClick={handleSave} disabled={isLoading}>
               {isLoading ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader className="mr-2 h-4 w-4 animate-spin" />
                   저장 중...
                 </>
               ) : (
@@ -157,8 +157,24 @@ export default function ProfileSection({ userName, userEmail, tokens }: ProfileS
                 size="sm"
                 className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 text-sm"
                 onClick={() => {
-                  // TODO: Open payment modal or navigate to payment page
-                  console.log('충전하기 clicked')
+                  const paymentWindow = window.open(
+                    '/payments/checkout',
+                    'payment',
+                    'width=700,height=700,centerscreen=yes,resizable=no,scrollbars=no'
+                  )
+                  
+                  if (!paymentWindow) {
+                    alert('팝업이 차단되었습니다. 팝업을 허용하고 다시 시도해주세요.')
+                    return
+                  }
+                  
+                  // Monitor window closure and refresh
+                  const checkInterval = setInterval(() => {
+                    if (paymentWindow.closed) {
+                      clearInterval(checkInterval)
+                      router.refresh() // Refresh to show updated token balance
+                    }
+                  }, 1000)
                 }}
               >
                 충전하기
@@ -198,7 +214,7 @@ export default function ProfileSection({ userName, userEmail, tokens }: ProfileS
         >
           {isLoggingOut ? (
             <>
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Loader className="h-4 w-4 animate-spin" />
               로그아웃 중...
             </>
           ) : (
@@ -226,7 +242,7 @@ export default function ProfileSection({ userName, userEmail, tokens }: ProfileS
             >
               {isDeleting ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader className="mr-2 h-4 w-4 animate-spin" />
                   삭제 중...
                 </>
               ) : (
@@ -236,6 +252,7 @@ export default function ProfileSection({ userName, userEmail, tokens }: ProfileS
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
     </div>
   )
 } 

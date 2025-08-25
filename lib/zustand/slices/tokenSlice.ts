@@ -1,4 +1,4 @@
-import { getUserTokensClient } from '@/utils/supabase/services/clientServices'
+import { getUserTokensClient } from '@/lib/supabase/services/clientServices'
 
 export interface TokenSlice {
   tokens: number

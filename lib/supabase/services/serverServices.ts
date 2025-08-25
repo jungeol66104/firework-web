@@ -1,7 +1,7 @@
 import { createClient } from '../clients/server'
 import { fetchInterviews, fetchInterviewById, createProfile, fetchProfileById, updateProfile, fetchUserInterviews, getCurrentUserInterviews, deleteInterview, searchInterviewsByCandidateName, getCurrentUser, checkInterviewOwnership, updateInterview, getCurrentUserProfile, updateCurrentUserProfile, deleteCurrentUserAccount, fetchInterviewQuestions } from './services'
 import { getUserTokens } from './tokenService'
-import { FetchInterviewsParams, FetchInterviewsResult, CreateProfileParams, Profile, Interview } from '@/utils/types'
+import { FetchInterviewsParams, FetchInterviewsResult, CreateProfileParams, Profile, Interview } from '@/lib/types'
 
 export async function fetchInterviewsServer(params: FetchInterviewsParams = {}): Promise<FetchInterviewsResult> {
   const supabase = await createClient()

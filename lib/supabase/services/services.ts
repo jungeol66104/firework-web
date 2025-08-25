@@ -1,5 +1,5 @@
 import { SupabaseClient } from '@supabase/supabase-js'
-import { Interview, FetchInterviewsParams, FetchInterviewsResult, CreateInterviewParams, Profile, CreateProfileParams } from '@/utils/types'
+import { Interview, FetchInterviewsParams, FetchInterviewsResult, CreateInterviewParams, Profile, CreateProfileParams } from '@/lib/types'
 
 export async function fetchInterviews(supabase: SupabaseClient, params: FetchInterviewsParams = {}): Promise<FetchInterviewsResult> {
   const { limit = 10, cursor, orderBy = 'created_at', orderDirection = 'desc', user_id } = params

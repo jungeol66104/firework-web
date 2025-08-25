@@ -9,10 +9,10 @@ import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { AdminCreateInterviewButton } from "@/components/admin/adminCreateInterviewButton"
-import { Interview } from "@/utils/types"
+import { Interview } from "@/lib/types"
 import createColumns from "@/components/admin/adminInterviewColumns"
-import { deleteInterviewClient, searchInterviewsByCandidateNameClient, getCurrentUserInterviewsClient } from "@/utils/supabase/services/clientServices"
-import { createClient } from "@/utils/supabase/clients/client"
+import { deleteInterviewClient, searchInterviewsByCandidateNameClient, getCurrentUserInterviewsClient } from "@/lib/supabase/services/clientServices"
+import { createClient } from "@/lib/supabase/clients/client"
 
 export function AdminInterviewDataTable() {
   const router = useRouter()

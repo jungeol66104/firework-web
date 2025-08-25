@@ -3,10 +3,10 @@
 import { useState, useEffect } from "react"
 import { CreateInterviewButton } from "@/components/createInterviewButton"
 import { InterviewDataTable } from "./interviewsDataTable"
-import { Interview } from "@/utils/types"
-import { getCurrentUserInterviewsClient } from "@/utils/supabase/services/clientServices"
-import { createClient } from "@/utils/supabase/clients/client"
-import { useInterviews, useInterviewLoading, useStore } from "@/utils/zustand"
+import { Interview } from "@/lib/types"
+import { getCurrentUserInterviewsClient } from "@/lib/supabase/services/clientServices"
+import { createClient } from "@/lib/supabase/clients/client"
+import { useInterviews, useInterviewLoading, useStore } from "@/lib/zustand"
 import { Loader } from "lucide-react"
 
 export default function InterviewsSection() {

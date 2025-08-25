@@ -12,6 +12,15 @@
       "env": {
         "SUPABASE_ACCESS_TOKEN": "sbp_4c3f3add1b2dc6b18780ee57598b353367a8d091"
       }
+    },
+    "tosspayments-integration-guide": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@tosspayments/integration-guide-mcp@latest"
+      ],
+      "env": {}
     }
   }
 }

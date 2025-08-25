@@ -18,32 +18,38 @@
   "cover_letter_competency": [10개]
 }
 
+[질문 카테고리별 특성]
+- general_personality: 자기소개서와 무관
+- cover_letter_personality: 자기소개서와 관련
+- cover_letter_competency: 자기소개서와 관련
+
 [원칙]
 - 채점항목도 고려해야
 - 두괄식이어야
 - 논리적이어야
+- 직관적이어야
 - 이 사람의 구체적인 경험을 잘 드러내야
 - 이 사람의 경험이 없는 건 지어내지 말고, 경험은 있는데 디테일이 부족한 경우는 디테일을 채워줘도 됨
 
 [데이터]
 <회사 정보>
-${company_info}
+${interview.company_info || ''}
 
 <직무 정보>
-${position}
-${job_posting}
+${interview.position || ''}
+${interview.job_posting || ''}
 
 <자기소개서>
-${cover_letter}
+${interview.cover_letter || ''}
 
 <이력서>
-${resume}
+${interview.resume || ''}
 
 <예상 질문>
-${expected_questions}
+${interview.expected_questions || ''}
 
 <채점 항목>
-${company_evaluation}
+${interview.company_evaluation || ''}
 
 [개선 요청]
 ${comment || '없음'}

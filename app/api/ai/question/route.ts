@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/utils/supabase/clients/server'
-import { fetchInterviewByIdServer } from '@/utils/supabase/services/serverServices'
-import { getUserTokens, spendTokens } from '@/utils/supabase/services/tokenService'
+import { createClient } from '@/lib/supabase/clients/server'
+import { fetchInterviewByIdServer } from '@/lib/supabase/services/serverServices'
+import { getUserTokens, spendTokens } from '@/lib/supabase/services/tokenService'
 import { GoogleGenAI, Type } from "@google/genai"
 
 export async function POST(request: NextRequest) {
@@ -300,7 +300,7 @@ async function generateQuestionWithGemini(prompt: string): Promise<string> {
   const ai = new GoogleGenAI({ apiKey: geminiApiKey })
 
   try {
-    console.log('Calling Gemini API with model: gemini-2.5-pro with JSON mode and schema')
+    console.log('Calling Gemini API with model: gemini-2.5-flash with JSON mode and schema')
     
     // Define JSON schema for structured output using Type enum
     const responseSchema = {
@@ -329,11 +329,8 @@ async function generateQuestionWithGemini(prompt: string): Promise<string> {
     }
     
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-pro",
-      contents: [{
-        role: "user",
-        parts: [{ text: prompt }]
-      }],
+      model: "gemini-2.5-flash",
+      contents: prompt,
       config: {
         responseMimeType: "application/json",
         responseSchema: responseSchema

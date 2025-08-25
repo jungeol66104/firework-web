@@ -7,9 +7,9 @@ import { ChevronLeft, ChevronRight, ChevronFirst, ChevronLast, Loader } from "lu
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Interview } from "@/utils/types"
+import { Interview } from "@/lib/types"
 import createTestColumns from "@/components/dashboard/interviewsColumns"
-import { deleteInterviewClient } from "@/utils/supabase/services/clientServices"
+import { deleteInterviewClient } from "@/lib/supabase/services/clientServices"
 
 interface InterviewDataTableProps {
   data: Interview[]

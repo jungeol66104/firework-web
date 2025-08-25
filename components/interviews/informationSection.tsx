@@ -9,9 +9,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
-import { Interview } from "@/utils/types"
-import { fetchInterviewByIdClient, getCurrentUserClient, updateInterviewClient } from "@/utils/supabase/services/clientServices"
-import { useCurrentInterview, useStore } from "@/utils/zustand"
+import { Interview } from "@/lib/types"
+import { fetchInterviewByIdClient, getCurrentUserClient, updateInterviewClient } from "@/lib/supabase/services/clientServices"
+import { useCurrentInterview, useStore } from "@/lib/zustand"
 
 const formSchema = z.object({
   companyName: z.string().min(1, "기업명을 입력해주세요"),

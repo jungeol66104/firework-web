@@ -1,5 +1,5 @@
-import { getCurrentUserProfileServer, getUserTokensServer } from "@/utils/supabase/services/serverServices"
-import { createClient } from "@/utils/supabase/clients/server"
+import { getCurrentUserProfileServer, getUserTokensServer } from "@/lib/supabase/services/serverServices"
+import { createClient } from "@/lib/supabase/clients/server"
 import InterviewsSection from "@/components/dashboard/interviewsSection"
 import ProfileSection from "@/components/dashboard/profileSection"
 import DashboardTableOfContents from "@/components/dashboard/dashboardTableOfContents"

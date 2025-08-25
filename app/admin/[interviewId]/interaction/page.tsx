@@ -2,8 +2,8 @@ import AnswersSection from "@/components/interviews/answers/answersSection"
 import InformationSection from "@/components/interviews/informationSection"
 import QuestionsSection from "@/components/interviews/questions/questionsSection"
 import TableOfContents from "@/components/interviews/tableOfContents"
-import { fetchInterviewByIdServer } from "@/utils/supabase/services/serverServices"
-import { createClient } from "@/utils/supabase/clients/server"
+import { fetchInterviewByIdServer } from "@/lib/supabase/services/serverServices"
+import { createClient } from "@/lib/supabase/clients/server"
 import { notFound } from "next/navigation"
 
 export default async function Page({ params }: { params: Promise<{ interviewId: string }> }) {
