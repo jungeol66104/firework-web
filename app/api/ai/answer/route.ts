@@ -354,64 +354,84 @@ async function generateAnswerWithGemini(prompt: string): Promise<string> {
   // Initialize Google GenAI with API key
   const ai = new GoogleGenAI({ apiKey: geminiApiKey })
 
-  try {
-    console.log('Calling Gemini API with model: gemini-2.5-flash with JSON mode and schema')
-    
-    // Define JSON schema for structured output using Type enum
-    const responseSchema = {
-      type: Type.OBJECT,
-      properties: {
-        general_personality: {
-          type: Type.ARRAY,
-          items: { type: Type.STRING },
-          minItems: 10,
-          maxItems: 10
+  // Try Gemini 2.5 Pro first, fallback to Flash
+  const modelsToTry = [
+    { name: 'gemini-2.5-pro', description: 'Gemini 2.5 Pro' },
+    { name: 'gemini-2.5-pro-001', description: 'Gemini 2.5 Pro (stable)' },
+    { name: 'gemini-2.5-flash', description: 'Gemini 2.5 Flash (fallback)' }
+  ]
+
+  for (const model of modelsToTry) {
+    try {
+      console.log(`Attempting to call Gemini API with model: ${model.name} (${model.description}) with JSON mode and schema`)
+      
+      // Define JSON schema for structured output using Type enum
+      const responseSchema = {
+        type: Type.OBJECT,
+        properties: {
+          general_personality: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            minItems: 10,
+            maxItems: 10
+          },
+          cover_letter_personality: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            minItems: 10,
+            maxItems: 10
+          },
+          cover_letter_competency: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            minItems: 10,
+            maxItems: 10
+          }
         },
-        cover_letter_personality: {
-          type: Type.ARRAY,
-          items: { type: Type.STRING },
-          minItems: 10,
-          maxItems: 10
-        },
-        cover_letter_competency: {
-          type: Type.ARRAY,
-          items: { type: Type.STRING },
-          minItems: 10,
-          maxItems: 10
-        }
-      },
-      required: ["general_personality", "cover_letter_personality", "cover_letter_competency"]
-    }
-    
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: responseSchema
+        required: ["general_personality", "cover_letter_personality", "cover_letter_competency"]
       }
-    })
-    
-    console.log('Raw Gemini API response:', response)
-    console.log('Response candidates:', response.candidates)
-    console.log('Response text:', response.text)
-    
-    const responseText = response.text
-    console.log('Gemini API response received, length:', responseText?.length || 0)
-    
-    if (!responseText) {
-      throw new Error('Empty response from Gemini API')
+      
+      const response = await ai.models.generateContent({
+        model: model.name,
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: responseSchema
+        }
+      })
+      
+      console.log('Raw Gemini API response:', response)
+      console.log('Response candidates:', response.candidates)
+      console.log('Response text:', response.text)
+      
+      const responseText = response.text
+      console.log('Gemini API response received, length:', responseText?.length || 0)
+      
+      if (!responseText) {
+        throw new Error('Empty response from Gemini API')
+      }
+      
+      console.log(`✅ Successfully used ${model.name} (${model.description})`)
+      return responseText
+      
+    } catch (error) {
+      console.error(`❌ Failed with ${model.name} (${model.description}):`, error instanceof Error ? error.message : 'Unknown error')
+      
+      // Check if it's an API key issue
+      if (error instanceof Error && error.message.includes('API key not valid')) {
+        throw new Error('Invalid Gemini API key. Please check your API key in .env.local and ensure it has access to Gemini')
+      }
+      
+      // If this is the last model to try, throw the error
+      if (model === modelsToTry[modelsToTry.length - 1]) {
+        throw new Error(`All models failed. Last error: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      }
+      
+      // Otherwise, continue to next model
+      continue
     }
-    
-    return responseText
-  } catch (error) {
-    console.error('Gemini API error:', error instanceof Error ? error.message : 'Unknown error')
-    
-    // Check if it's an API key issue
-    if (error instanceof Error && error.message.includes('API key not valid')) {
-      throw new Error('Invalid Gemini API key. Please check your API key in .env.local and ensure it has access to Gemini')
-    }
-    
-    throw new Error(`Gemini API error: ${error instanceof Error ? error.message : 'Unknown error'}`)
   }
+  
+  // This should never be reached due to the logic above, but just in case
+  throw new Error('No models available')
 }
