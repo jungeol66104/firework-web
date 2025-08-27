@@ -23,11 +23,22 @@ export class QueueManager {
   private getProcessingEndpoint(type: 'question' | 'answer'): string {
     // In production, use VERCEL_URL or NEXT_PUBLIC_APP_URL
     // In development, use localhost
-    const baseUrl = process.env.VERCEL_URL 
-      ? `https://${process.env.VERCEL_URL}` 
-      : process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+    const vercelUrl = process.env.VERCEL_URL
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL
     
-    return `${baseUrl}/api/process/${type}`
+    const baseUrl = vercelUrl 
+      ? (vercelUrl.startsWith('http') ? vercelUrl : `https://${vercelUrl}`)
+      : appUrl || 'http://localhost:3000'
+    
+    const endpoint = `${baseUrl}/api/process/${type}`
+    
+    console.log('=== QStash Endpoint Generation Debug ===')
+    console.log('- VERCEL_URL:', vercelUrl)
+    console.log('- NEXT_PUBLIC_APP_URL:', appUrl)
+    console.log('- Generated baseUrl:', baseUrl)
+    console.log('- Final endpoint:', endpoint)
+    
+    return endpoint
   }
 
   async queueQuestionGeneration(params: QueueJobParams): Promise<string> {
