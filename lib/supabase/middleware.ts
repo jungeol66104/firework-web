@@ -2,6 +2,16 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function updateSession(request: NextRequest) {
+  // Debug QStash webhook requests
+  if (request.nextUrl.pathname.startsWith('/api/process')) {
+    console.log('=== Middleware Debug for QStash ===')
+    console.log('Path:', request.nextUrl.pathname)
+    console.log('Method:', request.method)
+    console.log('Headers:', Object.fromEntries(request.headers.entries()))
+    console.log('Bypassing auth for QStash webhook')
+    return NextResponse.next({ request })
+  }
+
   let supabaseResponse = NextResponse.next({
     request,
   })

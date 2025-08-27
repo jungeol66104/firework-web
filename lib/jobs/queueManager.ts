@@ -48,6 +48,10 @@ export class QueueManager {
 
     const endpoint = this.getProcessingEndpoint('question')
     
+    console.log('=== QStash Publish Debug ===')
+    console.log('Publishing to URL:', endpoint)
+    console.log('Job params:', { jobId: params.jobId, userId: params.userId, interviewId: params.interviewId })
+    
     const response = await this.client.publishJSON({
       url: endpoint,
       body: {
@@ -62,6 +66,8 @@ export class QueueManager {
       retries: 3,
       delay: '0s'
     })
+    
+    console.log('QStash response:', response)
 
     console.log(`Queued question generation job: ${params.jobId}, messageId: ${response.messageId}`)
     return response.messageId
