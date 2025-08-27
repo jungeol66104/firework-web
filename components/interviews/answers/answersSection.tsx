@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -13,8 +13,9 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Hexagon, Loader } from "lucide-react"
 import { toast } from "sonner"
 import { AnswerDataTable } from "./answersDataTable"
-import { useCurrentAnswer, useAnswersLoading, useStore, useDecrementTokens, useRefreshTokens } from "@/lib/zustand"
-import { generateAnswerClient, fetchInterviewAnswersClient, deleteInterviewAnswerClient, fetchInterviewQuestionsClient, getUserTokensClient } from "@/lib/supabase/services/clientServices"
+import { useCurrentAnswer, useAnswersLoading, useStore, useDecrementTokens, useRefreshTokens, useHasActiveJob, useAddActiveJob, useStartPolling, useActiveJobs, useTokens, useSetCompletionCallback, useRemoveCompletionCallback } from "@/lib/zustand"
+import { generateAnswerClient, fetchInterviewAnswersClient, deleteInterviewAnswerClient, fetchInterviewQuestionsClient, getUserTokensClient, cancelJobClient, getUserActiveJobsClient } from "@/lib/supabase/services/clientServices"
+import { usePaymentPopup } from "@/hooks/usePaymentPopup"
 
 const formSchema = z.object({
   comment: z.string().optional(),
@@ -33,6 +34,8 @@ interface AnswerHistory {
   answer_data?: any
   created_at: string
   question_id: string
+  status?: string // For active jobs
+  isJob?: boolean // To distinguish jobs from actual answers
 }
 
 // Define the Question type for selection
@@ -117,7 +120,6 @@ const getSecondAndThirdAnswers = (answerData: any): string => {
 
 export default function AnswersSection({ showNavigation = true }: AnswersSectionProps) {
   const { interviewId } = useParams()
-  const [isSubmitting, setIsSubmitting] = useState(false)
   
   // Get state from Zustand store
   const currentAnswer = useCurrentAnswer()
@@ -139,12 +141,29 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
   const [questions, setQuestions] = useState<Question[]>([])
   
   // Global token state
+  const tokens = useTokens()
   const decrementTokens = useDecrementTokens()
   const refreshTokens = useRefreshTokens()
+  
+  // Job management state
+  const hasActiveJob = useHasActiveJob()
+  const addActiveJob = useAddActiveJob()
+  const startPolling = useStartPolling()
+  const activeJobs = useActiveJobs()
+  
   const [showConfirmationDialog, setShowConfirmationDialog] = useState(false)
-  const [showPaymentDialog, setShowPaymentDialog] = useState(false)
-  const [showLoadingDialog, setShowLoadingDialog] = useState(false)
+  const [showCancelJobDialog, setShowCancelJobDialog] = useState(false)
+  const [showInsufficientTokenDialog, setShowInsufficientTokenDialog] = useState(false)
+  const [activeJobInfo, setActiveJobInfo] = useState<{id: string, status: string, created_at: string} | null>(null)
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null)
+  const [isGenerateLoading, setIsGenerateLoading] = useState(false)
+  
+  // Payment popup hook
+  const { openPaymentPopup } = usePaymentPopup()
+  
+  // Completion callback hooks
+  const setCompletionCallback = useSetCompletionCallback()
+  const removeCompletionCallback = useRemoveCompletionCallback()
 
   const form = useForm<{ comment?: string }>({
     resolver: zodResolver(formSchema),
@@ -152,6 +171,30 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
       comment: "",
     },
   })
+
+  // Set up completion callback for answer jobs
+  useEffect(() => {
+    const callbackKey = `answers-${interviewId}`
+    
+    setCompletionCallback(callbackKey, (job) => {
+      if (job.type === 'answer' && job.interview_id === interviewId) {
+        if (job.status === 'completed') {
+          toast.success("답변 생성이 완료되었습니다!")
+          // Refresh history data to show the new answer
+          fetchHistoryData()
+        } else if (job.status === 'failed') {
+          toast.error("답변 생성에 실패했습니다. 다시 시도해주세요.")
+          // Still refresh to remove the job from the list
+          fetchHistoryData()
+        }
+      }
+    })
+    
+    // Cleanup callback on unmount
+    return () => {
+      removeCompletionCallback(callbackKey)
+    }
+  }, [interviewId, setCompletionCallback, removeCompletionCallback])
 
   // Helper function to format selected question and answer pair together
   const formatSelectedQuestionAndAnswer = (questionData: any, answerData: any): React.ReactNode => {
@@ -253,18 +296,40 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
   const fetchHistoryData = async () => {
     setLoadingHistory(true)
     try {
-      const answers = await fetchInterviewAnswersClient(interviewId as string)
+      // Fetch both active jobs and completed answers
+      const [activeJobs, answers] = await Promise.all([
+        getUserActiveJobsClient(),
+        fetchInterviewAnswersClient(interviewId as string)
+      ])
+
+      // Filter for answer type jobs related to current question
+      const answerJobs = activeJobs.filter(job => 
+        job.type === 'answer' && job.question_id === currentQuestionId
+      )
+      
+      // Convert jobs to display format
+      const jobsData: AnswerHistory[] = answerJobs.map(job => ({
+        id: job.id,
+        answer: `🔄 ${job.status === 'processing' ? '생성 중...' : '대기 중...'} ${job.comment ? `(${job.comment})` : ''}`,
+        created_at: job.created_at,
+        question_id: job.question_id,
+        status: job.status,
+        isJob: true
+      }))
       
       // Filter answers to only show those related to the current question
       const filteredAnswers = answers.filter(a => a.question_id === currentQuestionId)
       
-      setHistoryData(filteredAnswers.map(a => ({
+      const answersData: AnswerHistory[] = filteredAnswers.map(a => ({
         id: a.id,
         answer: a.answer_data ? getSecondAndThirdAnswers(a.answer_data) : (a.answer_text || "답변 없음"),
         answer_data: a.answer_data,
         created_at: a.created_at,
         question_id: a.question_id
-      })))
+      }))
+
+      // Combine with jobs at the top
+      setHistoryData([...jobsData, ...answersData])
       
       // Don't auto-select any answer - user must click to select
 
@@ -299,32 +364,17 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
       await deleteInterviewAnswerClient(id)
       console.log("Answer deleted:", id)
       
-      // Check if the deleted answer was the current one
+      // Check if the deleted answer was the currently selected one
       if (currentAnswerId === id) {
-        const answers = await fetchInterviewAnswersClient(interviewId as string)
-        const filteredAnswers = answers.filter(a => a.question_id === currentQuestionId)
-        
-        if (filteredAnswers.length > 0) {
-          // Update with the first available answer
-          const firstAnswer = filteredAnswers[0]
-          if (firstAnswer.answer_data) {
-            setCurrentAnswerData(firstAnswer.answer_data)
-            setCurrentAnswer("") // Will be rendered as HTML
-          } else {
-            setCurrentAnswerData(null)
-            setCurrentAnswer(firstAnswer.answer_text || "답변 데이터를 찾을 수 없습니다")
-          }
-          setCurrentAnswerId(firstAnswer.id)
-        } else {
-          // No answers left, show placeholder
-          setCurrentAnswerData(null)
-          setCurrentAnswer("질문을 선택한 후 답변을 생성할 수 있습니다")
-          setCurrentAnswerId("")
-        }
+        // If selected answer is deleted, clear selection
+        setCurrentAnswerData(null)
+        setCurrentAnswer("질문을 선택한 후 답변을 생성할 수 있습니다")
+        setCurrentAnswerId("")
       }
+      // If unselected answer is deleted, keep current selection unchanged
       
-      // Refresh the history data
-      fetchHistoryData()
+      // Note: No need to call fetchHistoryData() here as the data table
+      // already handles removing the row optimistically
     } catch (error) {
       console.error("Failed to delete answer:", error)
       throw error
@@ -351,69 +401,170 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
     setCurrentAnswerId(answerId)
   }
 
-  const handleGenerate = () => {
+  const handleCancelJobAndGenerateNew = async () => {
+    if (!activeJobInfo) return
+    
+    try {
+      // Cancel the existing job
+      await cancelJobClient(activeJobInfo.id)
+      toast.success("기존 작업을 취소했습니다.")
+      
+      // Close the cancel dialog
+      setShowCancelJobDialog(false)
+      setActiveJobInfo(null)
+      
+      // Start the new generation
+      handleGenerate()
+      
+    } catch (error: any) {
+      console.error("Failed to cancel job:", error)
+      toast.error("작업 취소에 실패했습니다. 다시 시도해주세요.")
+    }
+  }
+
+  const handleGenerate = async () => {
     if (!currentQuestionId) {
       toast.error("질문을 먼저 선택해주세요!")
       return
     }
 
-    // Get current token state from Zustand
-    const currentTokens = useStore.getState().tokens
+    setIsGenerateLoading(true)
 
-    // Check if user has enough tokens BEFORE showing confirmation dialog
-    if (currentTokens < 2) {
-      setShowPaymentDialog(true)
-      return
+    try {
+      // Get current token state from Zustand
+      const currentTokens = useStore.getState().tokens
+
+      // Check if user has enough tokens BEFORE showing confirmation dialog
+      if (currentTokens < 2) {
+        setShowInsufficientTokenDialog(true)
+        setIsGenerateLoading(false)
+        return
+      }
+
+    // Check for active jobs FIRST before showing confirmation dialog
+    try {
+      const response = await fetch('/api/ai/answer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          interviewId: interviewId as string,
+          questionId: currentQuestionId,
+          comment: form.getValues("comment"),
+          answerId: currentAnswerId || undefined
+        })
+      })
+      
+      if (response.status === 409) {
+        const data = await response.json()
+        if (data.activeJob) {
+          setActiveJobInfo(data.activeJob)
+          setShowCancelJobDialog(true)
+          setIsGenerateLoading(false)
+          return
+        }
+      } else if (response.ok) {
+        // No active job, proceed with normal confirmation
+        setPendingAction(() => async () => {
+          // Just show success since job was already created
+          const result = await response.json()
+          toast.success("답변 생성을 시작했습니다! 완료되면 표시됩니다.")
+          form.reset({ comment: "" })
+          fetchHistoryData()
+        })
+        setShowConfirmationDialog(true)
+        setIsGenerateLoading(false)
+        return
+      }
+    } catch (error) {
+      console.error("Error checking for active jobs:", error)
     }
 
+    // Fallback to old behavior
     setPendingAction(() => async () => {
-      setIsSubmitting(true)
       try {
         const comment = form.getValues("comment")
-        console.log("Generating answer with comment:", comment, "answerId:", currentAnswerId)
-        const generatedAnswer = await generateAnswerClient(
+        console.log("Starting background answer generation with comment:", comment, "answerId:", currentAnswerId)
+        
+        // Call the new job-based API
+        const response = await generateAnswerClient(
           interviewId as string, 
           currentQuestionId, 
           comment,
           currentAnswerId || undefined  // Pass answerId for regeneration mode
         )
         
-        console.log("Generated answer object:", generatedAnswer)
-        console.log("Answer data:", generatedAnswer.answer_data)
+        console.log("Answer job queued successfully:", response)
         
-        // Update the current answer with the generated one
-        if (generatedAnswer.answer_data) {
-          setCurrentAnswerData(generatedAnswer.answer_data)
-          setCurrentAnswer("") // Will be rendered as HTML
-        } else {
-          setCurrentAnswerData(null)
-          setCurrentAnswer(generatedAnswer.answer_text || "답변을 불러올 수 없습니다")
-        }
-        setCurrentAnswerId(generatedAnswer.id)
+        // Add job to active jobs and start polling
+        addActiveJob({
+          id: response.jobId,
+          user_id: '', // Will be set by polling
+          interview_id: interviewId as string,
+          type: 'answer',
+          status: 'queued',
+          question_id: currentQuestionId,
+          comment: comment || undefined,
+          created_at: new Date().toISOString()
+        })
+        
+        // Start polling for job updates
+        startPolling()
         
         // Clear the comment form
         form.reset({ comment: "" })
         
-        // Update global token state and refresh history
-        decrementTokens(2)
+        // Show success message
+        toast.success("답변 생성을 시작했습니다! 완료되면 표시됩니다.")
+        
+        // Refresh history data to show the new job in progress
         fetchHistoryData()
         
-        toast.success("답변이 성공적으로 생성되었습니다!")
       } catch (error: any) {
-        console.error("Failed to generate answer:", error)
+        console.error("Failed to start answer generation:", error)
         
         // Check if it's a token insufficient error
         if (error.message && error.message.includes('Insufficient tokens')) {
           toast.error("토큰이 부족합니다. 토큰을 구매해주세요.")
-          setShowPaymentDialog(true)
+        } else if (error.message && error.message.includes('already in progress')) {
+          // Try to parse the response to get active job info
+          try {
+            // The error might contain response data, let's try to fetch it
+            const response = await fetch('/api/ai/answer', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                interviewId: interviewId as string,
+                questionId: currentQuestionId,
+                comment: form.getValues("comment"),
+                answerId: currentAnswerId || undefined
+              })
+            })
+            if (response.status === 409) {
+              const data = await response.json()
+              if (data.activeJob) {
+                setActiveJobInfo(data.activeJob)
+                setShowCancelJobDialog(true)
+                setIsGenerateLoading(false)
+                return
+              }
+            }
+          } catch (parseError) {
+            console.error("Could not parse active job info:", parseError)
+          }
+          toast.error("이미 답변 생성이 진행 중입니다.")
         } else {
-          toast.error("답변 생성에 실패했습니다. 다시 시도해주세요.")
+          toast.error("답변 생성 시작에 실패했습니다. 다시 시도해주세요.")
         }
-      } finally {
-        setIsSubmitting(false)
       }
-    })
+    }) // End of setPendingAction call
+    
     setShowConfirmationDialog(true)
+    setIsGenerateLoading(false)
+    } catch (error) {
+      console.error("Error in handleGenerate:", error)
+      setIsGenerateLoading(false)
+      toast.error("생성 준비 중 오류가 발생했습니다. 다시 시도해주세요.")
+    }
   }
 
   const onSubmit = async (data: { comment?: string }) => {
@@ -423,42 +574,20 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
 
   const handleConfirmGenerate = async () => {
     setShowConfirmationDialog(false)
-    setShowLoadingDialog(true)
     
     if (pendingAction) {
       try {
         await pendingAction()
+        // Note: pendingAction now handles the new job-based approach
       } catch (error) {
         console.error('Error during generation:', error)
+        toast.error("답변 생성 시작에 실패했습니다. 다시 시도해주세요.")
       } finally {
-        setShowLoadingDialog(false)
         setPendingAction(null)
       }
     }
   }
 
-  const handlePaymentConfirm = () => {
-    setShowPaymentDialog(false)
-    
-    const paymentWindow = window.open(
-      '/payments/checkout',
-      'payment',
-      'width=700,height=700,centerscreen=yes,resizable=no,scrollbars=no'
-    )
-    
-    if (!paymentWindow) {
-      alert('팝업이 차단되었습니다. 팝업을 허용하고 다시 시도해주세요.')
-      return
-    }
-    
-    // Monitor window closure and refresh tokens
-    const checkInterval = setInterval(() => {
-      if (paymentWindow.closed) {
-        clearInterval(checkInterval)
-        refreshTokens() // Refresh global token state
-      }
-    }, 1000)
-  }
 
   return (
     <div id="answers" className="w-full max-w-4xl p-8">
@@ -559,11 +688,20 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
                   </div>
                   <Button
                     type="button"
-                    disabled={isSubmitting || !currentQuestionId}
+                    disabled={hasActiveJob('answer') || !currentQuestionId || isGenerateLoading}
                     className="px-8 py-2 bg-black text-white hover:bg-zinc-800 disabled:bg-gray-400"
                     onClick={handleGenerate}
                   >
-                    {isSubmitting ? "생성 중..." : currentAnswerId ? "재생성" : "생성"}
+                    {isGenerateLoading ? (
+                      <div className="flex items-center gap-2">
+                        <Loader className="h-4 w-4 animate-spin" />
+                        <span>준비 중...</span>
+                      </div>
+                    ) : hasActiveJob('answer') ? (
+                      "생성 중..."
+                    ) : (
+                      currentAnswerId ? "재생성" : "생성"
+                    )}
                   </Button>
                 </div>
               </div>
@@ -589,31 +727,64 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Payment Dialog */}
-      <AlertDialog open={showPaymentDialog} onOpenChange={setShowPaymentDialog}>
+
+      {/* Cancel Job Dialog */}
+      <AlertDialog open={showCancelJobDialog} onOpenChange={setShowCancelJobDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>사용 횟수 소진</AlertDialogTitle>
+            <AlertDialogTitle>답변 생성이 진행 중입니다</AlertDialogTitle>
             <AlertDialogDescription>
-              모든 사용 횟수를 소진했습니다. 토큰을 충전하시겠습니까?
+              현재 답변 생성 작업이 {activeJobInfo?.status === 'processing' ? '진행' : '대기'} 중입니다.
+              <br />
+              기존 작업을 취소하고 새로운 작업을 시작하시겠습니까?
+              <br />
+              <small className="text-gray-500 mt-2 block">
+                작업 시작: {activeJobInfo?.created_at ? new Date(activeJobInfo.created_at).toLocaleString('ko-KR') : '알 수 없음'}
+              </small>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>취소</AlertDialogCancel>
-            <AlertDialogAction onClick={handlePaymentConfirm} className="bg-blue-600 hover:bg-blue-700">
+            <AlertDialogAction onClick={handleCancelJobAndGenerateNew} className="bg-red-600 hover:bg-red-700">
+              기존 작업 취소하고 새로 시작
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Insufficient Token Dialog */}
+      <AlertDialog open={showInsufficientTokenDialog} onOpenChange={setShowInsufficientTokenDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>토큰 부족</AlertDialogTitle>
+            <AlertDialogDescription>
+              답변 생성에는 2 토큰이 필요합니다. 토큰을 충전하시겠습니까?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => {
+                setShowInsufficientTokenDialog(false)
+                const previousTokens = useStore.getState().tokens
+                openPaymentPopup({
+                  onClose: async () => {
+                    await refreshTokens()
+                    const currentTokens = useStore.getState().tokens
+                    if (currentTokens > previousTokens) {
+                      toast.success("토큰이 충전되었습니다!")
+                    }
+                  }
+                })
+              }}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
               충전하기
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Loading Dialog */}
-      <AlertDialog open={showLoadingDialog} onOpenChange={() => {}}>
-        <AlertDialogContent className="w-20 h-20 p-0 border-none shadow-lg bg-white flex items-center justify-center">
-          <AlertDialogTitle className="sr-only">답변 생성 중</AlertDialogTitle>
-          <Loader className="w-4 h-4 animate-spin text-gray-600" />
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   )
 } 

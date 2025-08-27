@@ -1,0 +1,99 @@
+import { Client } from '@upstash/qstash'
+
+export interface QueueJobParams {
+  jobId: string
+  type: 'question' | 'answer'
+  userId: string
+  interviewId: string
+  questionId?: string
+  comment?: string
+}
+
+export class QueueManager {
+  private get client(): Client {
+    const token = process.env.QSTASH_TOKEN
+    if (!token) {
+      throw new Error('QSTASH_TOKEN environment variable is not set')
+    }
+    console.log('QStash token exists:', !!token)
+    console.log('QStash token length:', token.length)
+    return new Client({ token })
+  }
+
+  private getProcessingEndpoint(type: 'question' | 'answer'): string {
+    // In production, use VERCEL_URL or NEXT_PUBLIC_APP_URL
+    // In development, use localhost
+    const baseUrl = process.env.VERCEL_URL 
+      ? `https://${process.env.VERCEL_URL}` 
+      : process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+    
+    return `${baseUrl}/api/process/${type}`
+  }
+
+  async queueQuestionGeneration(params: QueueJobParams): Promise<string> {
+    if (params.type !== 'question') {
+      throw new Error('Invalid job type for question generation')
+    }
+
+    const endpoint = this.getProcessingEndpoint('question')
+    
+    const response = await this.client.publishJSON({
+      url: endpoint,
+      body: {
+        jobId: params.jobId,
+        userId: params.userId,
+        interviewId: params.interviewId,
+        comment: params.comment
+      },
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      retries: 3,
+      delay: '0s'
+    })
+
+    console.log(`Queued question generation job: ${params.jobId}, messageId: ${response.messageId}`)
+    return response.messageId
+  }
+
+  async queueAnswerGeneration(params: QueueJobParams): Promise<string> {
+    if (params.type !== 'answer' || !params.questionId) {
+      throw new Error('Invalid job type or missing questionId for answer generation')
+    }
+
+    const endpoint = this.getProcessingEndpoint('answer')
+    
+    const response = await this.client.publishJSON({
+      url: endpoint,
+      body: {
+        jobId: params.jobId,
+        userId: params.userId,
+        interviewId: params.interviewId,
+        questionId: params.questionId,
+        comment: params.comment
+      },
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      retries: 3,
+      delay: '0s'
+    })
+
+    console.log(`Queued answer generation job: ${params.jobId}, messageId: ${response.messageId}`)
+    return response.messageId
+  }
+
+  async cancelJob(messageId: string): Promise<void> {
+    try {
+      await this.client.messages.delete(messageId)
+      console.log(`Cancelled job with messageId: ${messageId}`)
+    } catch (error) {
+      console.error('Error cancelling job:', error)
+      throw error
+    }
+  }
+}
+
+export function createQueueManager(): QueueManager {
+  return new QueueManager()
+}

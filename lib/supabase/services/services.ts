@@ -392,6 +392,17 @@ export async function deleteInterviewQuestion(
   supabase: SupabaseClient,
   questionId: string
 ): Promise<void> {
+  // First, delete any generation jobs that reference this question
+  const { error: jobDeleteError } = await supabase
+    .from('generation_jobs')
+    .delete()
+    .eq('question_id', questionId)
+
+  if (jobDeleteError) {
+    throw new Error(`Failed to delete related generation jobs: ${jobDeleteError.message}`)
+  }
+
+  // Then delete the question itself
   const { error } = await supabase
     .from('interview_questions')
     .delete()
@@ -468,6 +479,32 @@ export async function deleteInterviewAnswer(
   supabase: SupabaseClient,
   answerId: string
 ): Promise<void> {
+  // Get the question_id associated with this answer first
+  const { data: answerData, error: fetchError } = await supabase
+    .from('interview_answers')
+    .select('question_id')
+    .eq('id', answerId)
+    .single()
+
+  if (fetchError) {
+    throw new Error(`Failed to fetch answer details: ${fetchError.message}`)
+  }
+
+  // Delete any generation jobs that were used to create answers for this specific question
+  // (Answer generation jobs reference the question_id, not the answer_id)
+  if (answerData?.question_id) {
+    const { error: jobDeleteError } = await supabase
+      .from('generation_jobs')
+      .delete()
+      .eq('question_id', answerData.question_id)
+      .eq('type', 'answer')
+
+    if (jobDeleteError) {
+      throw new Error(`Failed to delete related generation jobs: ${jobDeleteError.message}`)
+    }
+  }
+
+  // Then delete the answer itself
   const { error } = await supabase
     .from('interview_answers')
     .delete()

@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Hexagon } from 'lucide-react'
+import { usePaymentPopup } from '@/hooks/usePaymentPopup'
 
 interface TokenPurchaseModalProps {
   open: boolean
@@ -45,41 +46,29 @@ const TOKEN_PACKAGES: Package[] = [
 
 export default function TokenPurchaseModal({ open, onOpenChange, onSuccess }: TokenPurchaseModalProps) {
   const [selectedPackage, setSelectedPackage] = useState<string>('standard')
+  const { openPaymentPopup } = usePaymentPopup()
 
   const handlePurchase = () => {
-    // Open payment window
-    const paymentWindow = window.open(
-      `/payments/checkout?packageId=${selectedPackage}`,
-      'payment',
-      'width=500,height=700,centerscreen=yes,resizable=no,scrollbars=no'
-    )
-
-    if (!paymentWindow) {
-      alert('팝업이 차단되었습니다. 팝업을 허용하고 다시 시도해주세요.')
-      return
-    }
-
-    // Monitor window closure
-    const checkInterval = setInterval(() => {
-      if (paymentWindow.closed) {
-        clearInterval(checkInterval)
+    const cleanup = openPaymentPopup({
+      packageId: selectedPackage,
+      width: 500,
+      onClose: () => {
         onOpenChange(false)
         if (onSuccess) {
           onSuccess()
         }
       }
-    }, 1000)
-
-    // Cleanup if modal is closed
-    const originalOnOpenChange = onOpenChange
-    onOpenChange = (open) => {
-      if (!open) {
-        clearInterval(checkInterval)
-        if (!paymentWindow.closed) {
-          paymentWindow.close()
+    })
+    
+    // Store cleanup function for potential manual cleanup
+    if (cleanup && typeof cleanup === 'function') {
+      const originalOnOpenChange = onOpenChange
+      onOpenChange = (open) => {
+        if (!open && typeof cleanup === 'function') {
+          cleanup()
         }
+        originalOnOpenChange(open)
       }
-      originalOnOpenChange(open)
     }
   }
 

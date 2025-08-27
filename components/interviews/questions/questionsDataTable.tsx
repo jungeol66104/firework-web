@@ -11,6 +11,8 @@ interface QuestionHistory {
   id: string
   question: string
   created_at: string
+  status?: string
+  isJob?: boolean
 }
 
 interface QuestionDataTableProps {

@@ -4,9 +4,10 @@ import { createInterviewSlice, InterviewSlice } from './slices/interviewSlice'
 import { createQuestionsSlice, QuestionsSlice } from './slices/questionsSlice'
 import { createAnswersSlice, AnswersSlice } from './slices/answersSlice'
 import { createTokenSlice, TokenSlice } from './slices/tokenSlice'
+import { createJobsSlice, JobsSlice } from './slices/jobsSlice'
 
 // Combined store type
-interface Store extends InterviewSlice, QuestionsSlice, AnswersSlice, TokenSlice {}
+interface Store extends InterviewSlice, QuestionsSlice, AnswersSlice, TokenSlice, JobsSlice {}
 
 // Create the main store
 export const useStore = create<Store>()(
@@ -17,6 +18,7 @@ export const useStore = create<Store>()(
         ...createQuestionsSlice(set, get),
         ...createAnswersSlice(set, get),
         ...createTokenSlice(set, get),
+        ...createJobsSlice(set, get),
       }),
       {
         name: 'interview-store',
@@ -63,6 +65,18 @@ export const useTokens = () => useStore((state) => state.tokens)
 export const useTokensLoading = () => useStore((state) => state.isLoadingTokens)
 export const useRefreshTokens = () => useStore((state) => state.refreshTokens)
 export const useDecrementTokens = () => useStore((state) => state.decrementTokens)
+
+// Job selectors
+export const useActiveJobs = () => useStore((state) => state.activeJobs)
+export const useIsPolling = () => useStore((state) => state.isPolling)
+export const useHasActiveJob = () => useStore((state) => state.hasActiveJob)
+export const useStartPolling = () => useStore((state) => state.startPolling)
+export const useStopPolling = () => useStore((state) => state.stopPolling)
+export const useAddActiveJob = () => useStore((state) => state.addActiveJob)
+export const useUpdateJob = () => useStore((state) => state.updateJob)
+export const useRemoveJob = () => useStore((state) => state.removeJob)
+export const useSetCompletionCallback = () => useStore((state) => state.setCompletionCallback)
+export const useRemoveCompletionCallback = () => useStore((state) => state.removeCompletionCallback)
 
 
 

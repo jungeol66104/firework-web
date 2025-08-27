@@ -1,5 +1,5 @@
 import { ColumnDef } from "@tanstack/react-table"
-import { MoreHorizontal } from "lucide-react"
+import { MoreHorizontal, Loader } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
@@ -12,6 +12,8 @@ interface AnswerHistory {
   answer_data?: any
   created_at: string
   question_id: string
+  status?: string
+  isJob?: boolean
 }
 
 const createAnswerColumns = (onDelete?: (id: string) => Promise<void>, onSetCurrent?: (answer: string, answerId: string, answerData?: any) => void, currentAnswerId?: string): ColumnDef<AnswerHistory>[] => [
@@ -28,6 +30,20 @@ const createAnswerColumns = (onDelete?: (id: string) => Promise<void>, onSetCurr
     cell: ({ row }) => {
       const item = row.original
       const isSelected = currentAnswerId === item.id
+      
+      if (item.isJob) {
+        const statusText = item.status === 'processing' ? '생성 중...' : '대기 중...'
+        const answer = row.getValue("answer") as string
+        const commentText = answer.includes('(') ? answer.match(/\(([^)]+)\)/)?.[1] : ''
+        
+        return (
+          <div className="truncate flex items-center gap-2">
+            <Loader className="h-4 w-4 animate-spin" />
+            <span>{statusText} {commentText ? `(${commentText})` : ''}</span>
+          </div>
+        )
+      }
+      
       return (
         <div 
           className="truncate cursor-pointer"

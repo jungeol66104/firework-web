@@ -12,6 +12,7 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { updateCurrentUserProfileClient } from "@/lib/supabase/services/clientServices"
 import { deleteUserAccount, signout } from "@/app/auth/actions"
+import { usePaymentPopup } from "@/hooks/usePaymentPopup"
 
 interface ProfileSectionProps {
   userName: string
@@ -28,6 +29,7 @@ export default function ProfileSection({ userName, userEmail, tokens }: ProfileS
   const [isDeleting, setIsDeleting] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const router = useRouter()
+  const { openPaymentPopup } = usePaymentPopup()
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -157,24 +159,9 @@ export default function ProfileSection({ userName, userEmail, tokens }: ProfileS
                 size="sm"
                 className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 text-sm"
                 onClick={() => {
-                  const paymentWindow = window.open(
-                    '/payments/checkout',
-                    'payment',
-                    'width=700,height=700,centerscreen=yes,resizable=no,scrollbars=no'
-                  )
-                  
-                  if (!paymentWindow) {
-                    alert('팝업이 차단되었습니다. 팝업을 허용하고 다시 시도해주세요.')
-                    return
-                  }
-                  
-                  // Monitor window closure and refresh
-                  const checkInterval = setInterval(() => {
-                    if (paymentWindow.closed) {
-                      clearInterval(checkInterval)
-                      router.refresh() // Refresh to show updated token balance
-                    }
-                  }, 1000)
+                  openPaymentPopup({
+                    onClose: () => router.refresh() // Refresh to show updated token balance
+                  })
                 }}
               >
                 충전하기

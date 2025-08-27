@@ -284,3 +284,35 @@ export async function getUserTokensClient(): Promise<number> {
   console.log("getUserTokens result:", tokens)
   return tokens
 }
+
+export async function cancelJobClient(jobId: string): Promise<void> {
+  const response = await fetch('/api/jobs/cancel', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ jobId }),
+  })
+
+  if (!response.ok) {
+    const errorData = await response.json()
+    throw new Error(errorData.error || 'Failed to cancel job')
+  }
+}
+
+export async function getUserActiveJobsClient(): Promise<any[]> {
+  const response = await fetch('/api/jobs/active', {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  })
+
+  if (!response.ok) {
+    const errorData = await response.json()
+    throw new Error(errorData.error || 'Failed to fetch active jobs')
+  }
+
+  const result = await response.json()
+  return result.jobs || []
+}

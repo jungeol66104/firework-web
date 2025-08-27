@@ -13,6 +13,8 @@ interface AnswerHistory {
   answer_data?: any
   created_at: string
   question_id: string
+  status?: string
+  isJob?: boolean
 }
 
 interface AnswerDataTableProps {

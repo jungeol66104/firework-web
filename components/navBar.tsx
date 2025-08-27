@@ -6,6 +6,7 @@ import { Hexagon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getCurrentUserClient, getCurrentUserProfileClient } from "@/lib/supabase/services/clientServices";
 import { useTokens, useRefreshTokens } from "@/lib/zustand";
+import { usePaymentPopup } from "@/hooks/usePaymentPopup";
 import { User } from "@supabase/supabase-js";
 import { Profile } from "@/lib/types";
 
@@ -17,6 +18,7 @@ export const NavBar: React.FC = () => {
   // Global token state
   const tokens = useTokens();
   const refreshTokens = useRefreshTokens();
+  const { openPaymentPopup } = usePaymentPopup();
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -67,24 +69,9 @@ export const NavBar: React.FC = () => {
             size="sm"
             className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 text-sm"
             onClick={() => {
-              const paymentWindow = window.open(
-                '/payments/checkout',
-                'payment',
-                'width=700,height=700,centerscreen=yes,resizable=no,scrollbars=no'
-              )
-              
-              if (!paymentWindow) {
-                alert('팝업이 차단되었습니다. 팝업을 허용하고 다시 시도해주세요.')
-                return
-              }
-              
-              // Monitor window closure and refresh tokens
-              const checkInterval = setInterval(() => {
-                if (paymentWindow.closed) {
-                  clearInterval(checkInterval)
-                  refreshTokens() // Refresh global token state
-                }
-              }, 1000)
+              openPaymentPopup({
+                onClose: () => refreshTokens() // Refresh global token state
+              })
             }}
           >
             충전하기

@@ -1,5 +1,5 @@
 import { ColumnDef } from "@tanstack/react-table"
-import { MoreHorizontal } from "lucide-react"
+import { MoreHorizontal, Loader } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
@@ -11,6 +11,8 @@ interface QuestionHistory {
   id: string
   question: string
   created_at: string
+  status?: string
+  isJob?: boolean
 }
 
 const createQuestionColumns = (onDelete?: (id: string) => Promise<void>, onSetCurrent?: (question: string, questionId: string) => void): ColumnDef<QuestionHistory>[] => [
@@ -25,7 +27,24 @@ const createQuestionColumns = (onDelete?: (id: string) => Promise<void>, onSetCu
     header: () => <div>질문</div>,
     minSize: 200,
     maxSize: 200,
-    cell: ({ row }) => <div className="truncate">{row.getValue("question")}</div>,
+    cell: ({ row }) => {
+      const item = row.original
+      const question = row.getValue("question") as string
+      
+      if (item.isJob) {
+        const statusText = item.status === 'processing' ? '생성 중...' : '대기 중...'
+        const commentText = question.includes('(') ? question.match(/\(([^)]+)\)/)?.[1] : ''
+        
+        return (
+          <div className="truncate flex items-center gap-2">
+            <Loader className="h-4 w-4 animate-spin" />
+            <span>{statusText} {commentText ? `(${commentText})` : ''}</span>
+          </div>
+        )
+      }
+      
+      return <div className="truncate">{question}</div>
+    },
   },
   {
     accessorKey: "created_at",
