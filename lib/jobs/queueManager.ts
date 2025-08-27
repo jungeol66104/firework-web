@@ -21,14 +21,15 @@ export class QueueManager {
   }
 
   private getProcessingEndpoint(type: 'question' | 'answer'): string {
-    // In production, use VERCEL_URL or NEXT_PUBLIC_APP_URL
-    // In development, use localhost
+    // Force production domain for QStash webhooks instead of preview URLs
     const vercelUrl = process.env.VERCEL_URL
     const appUrl = process.env.NEXT_PUBLIC_APP_URL
     
-    const baseUrl = vercelUrl 
-      ? (vercelUrl.startsWith('http') ? vercelUrl : `https://${vercelUrl}`)
-      : appUrl || 'http://localhost:3000'
+    // Use production domain or fallback to NEXT_PUBLIC_APP_URL or localhost
+    const baseUrl = appUrl || 
+      (vercelUrl && !vercelUrl.includes('jungeol66104s-projects') 
+        ? (vercelUrl.startsWith('http') ? vercelUrl : `https://${vercelUrl}`)
+        : 'http://localhost:3000')
     
     const endpoint = `${baseUrl}/api/process/${type}`
     
