@@ -117,7 +117,7 @@ function PaymentCheckoutContent() {
 
 
   return (
-    <div className="min-h-screen bg-white flex items-center justify-center p-4">
+    <div className="h-screen sm:min-h-screen bg-white flex items-center justify-center p-4">
       <div className="w-full max-w-sm max-h-[600px] flex flex-col">
         <div className="flex items-center gap-2 mb-6">
           <div className="relative">

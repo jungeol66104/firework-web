@@ -673,7 +673,7 @@ export default function QuestionsSection({ showNavigation = true }: QuestionsSec
                 </div>
               </div>
             )}
-            <div className="sticky bottom-0 bg-white/40 backdrop-blur-sm px-8 py-3 mt-6 -mx-8">
+            <div className="sticky bottom-0 bg-white/40 backdrop-blur-sm px-4 sm:px-8 py-3 mt-6 -mx-4 sm:-mx-8">
               <div className="flex justify-between items-center">
                 <div>
                   {showNavigation && (
