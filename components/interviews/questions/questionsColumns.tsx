@@ -5,6 +5,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { useState } from "react"
 import { toast } from "sonner"
+import { GenerationTimer } from "@/components/ui/generation-timer"
 
 // Define the Question type for the history table
 interface QuestionHistory {
@@ -34,11 +35,16 @@ const createQuestionColumns = (onDelete?: (id: string) => Promise<void>, onSetCu
       if (item.isJob) {
         const statusText = item.status === 'processing' || item.status === 'progress' ? '생성 중...' : '대기 중...'
         const commentText = question.includes('(') ? question.match(/\(([^)]+)\)/)?.[1] : ''
+        const isActive = item.status === 'processing' || item.status === 'progress' || item.status === 'queued'
         
         return (
           <div className="truncate flex items-center gap-2">
             <Loader className="h-4 w-4 animate-spin" />
             <span>{statusText} {commentText ? `(${commentText})` : ''}</span>
+            <GenerationTimer 
+              startTime={item.created_at} 
+              isActive={isActive}
+            />
           </div>
         )
       }

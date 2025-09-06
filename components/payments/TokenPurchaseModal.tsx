@@ -130,7 +130,7 @@ export default function TokenPurchaseModal({ open, onOpenChange, onSuccess }: To
 
         <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
           <div className="text-blue-700 text-sm">
-            AI 질문 생성에는 1토큰이, AI 답변 생성에는 2토큰이 필요합니다.
+            AI 질문 생성에는 1 토큰이, AI 답변 생성에는 2 토큰이 필요합니다.
           </div>
         </div>
       </DialogContent>

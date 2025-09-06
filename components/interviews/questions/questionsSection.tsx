@@ -13,7 +13,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Hexagon, Loader } from "lucide-react"
 import { toast } from "sonner"
 import { QuestionDataTable } from "./questionsDataTable"
-import { useCurrentQuestion, useQuestionsLoading, useStore, useDecrementTokens, useRefreshTokens, useHasActiveJob, useAddActiveJob, useStartPolling, useActiveJobs, useTokens, useSetCompletionCallback, useRemoveCompletionCallback } from "@/lib/zustand"
+import { useCurrentQuestion, useQuestionsLoading, useStore, useDecrementTokens, useRefreshTokens, useHasActiveJob, useAddActiveJob, useStartPolling, useActiveJobs, useTokens, useSetCompletionCallback, useRemoveCompletionCallback, useCurrentInterview } from "@/lib/zustand"
 import { generateQuestionClient, fetchInterviewQuestionsClient, deleteInterviewQuestionClient, getUserTokensClient, cancelJobClient, getUserActiveJobsClient } from "@/lib/supabase/services/clientServices"
 import { usePaymentPopup } from "@/hooks/usePaymentPopup"
 
@@ -118,6 +118,24 @@ export default function QuestionsSection({ showNavigation = true }: QuestionsSec
   const setCurrentQuestion = useStore((state) => state.setCurrentQuestion)
   const setCurrentQuestionId = useStore((state) => state.setCurrentQuestionId)
   const setQuestionsLoading = useStore((state) => state.setQuestionsLoading)
+  const currentInterview = useCurrentInterview()
+  
+  // Helper function to check if required basic info fields are filled
+  const areRequiredFieldsFilled = () => {
+    if (!currentInterview) return false
+    const requiredFields = [
+      'company_name',
+      'position', 
+      'job_posting',
+      'cover_letter',
+      'resume',
+      'company_info'
+    ]
+    return requiredFields.every(field => 
+      currentInterview[field as keyof typeof currentInterview] && 
+      String(currentInterview[field as keyof typeof currentInterview]).trim() !== ''
+    )
+  }
   
   // Local state for current question data (JSON format)
   const [currentQuestionData, setCurrentQuestionData] = useState<any>(null)
@@ -417,6 +435,12 @@ export default function QuestionsSection({ showNavigation = true }: QuestionsSec
   }
 
   const handleGenerate = async () => {
+    // Check if required basic info fields are filled FIRST
+    if (!areRequiredFieldsFilled()) {
+      toast.error("기본 정보의 필수 항목을 모두 입력해주세요!")
+      return
+    }
+    
     setIsGenerateLoading(true)
     
     try {
@@ -626,6 +650,14 @@ export default function QuestionsSection({ showNavigation = true }: QuestionsSec
                 </div>
               </>
             )}
+            {/* Alert when required basic info fields are not filled */}
+            {!areRequiredFieldsFilled() && (
+              <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
+                <div className="text-blue-700 text-sm">
+                  기본 정보의 필수 항목(기업명, 직무, 채용공고, 자기소개서, 이력서, 기업 정보)을 모두 입력해야 질문을 생성할 수 있습니다.
+                </div>
+              </div>
+            )}
             <div className="sticky bottom-0 bg-white/40 backdrop-blur-sm px-8 py-3 mt-6 -mx-8">
               <div className="flex justify-between items-center">
                 <div>
@@ -656,7 +688,7 @@ export default function QuestionsSection({ showNavigation = true }: QuestionsSec
                   </div>
                   <Button
                     type="button"
-                    disabled={hasActiveJob('question') || isGenerateLoading}
+                    disabled={hasActiveJob('question') || isGenerateLoading || !areRequiredFieldsFilled()}
                     className="px-8 py-2 bg-black text-white hover:bg-zinc-800 disabled:bg-gray-400"
                     onClick={handleGenerate}
                   >

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { useState } from "react"
+import { GenerationTimer } from "@/components/ui/generation-timer"
 
 // Define the Answer type for the history table
 interface AnswerHistory {
@@ -35,11 +36,16 @@ const createAnswerColumns = (onDelete?: (id: string) => Promise<void>, onSetCurr
         const statusText = item.status === 'processing' || item.status === 'progress' ? '생성 중...' : '대기 중...'
         const answer = row.getValue("answer") as string
         const commentText = answer.includes('(') ? answer.match(/\(([^)]+)\)/)?.[1] : ''
+        const isActive = item.status === 'processing' || item.status === 'progress' || item.status === 'queued'
         
         return (
           <div className="truncate flex items-center gap-2">
             <Loader className="h-4 w-4 animate-spin" />
             <span>{statusText} {commentText ? `(${commentText})` : ''}</span>
+            <GenerationTimer 
+              startTime={item.created_at} 
+              isActive={isActive}
+            />
           </div>
         )
       }

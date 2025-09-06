@@ -12,6 +12,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Interview } from "@/lib/types"
 import { fetchInterviewByIdClient, getCurrentUserClient, updateInterviewClient } from "@/lib/supabase/services/clientServices"
 import { useCurrentInterview, useStore } from "@/lib/zustand"
+import { toast } from "sonner"
 
 const formSchema = z.object({
   companyName: z.string().min(1, "기업명을 입력해주세요"),
@@ -191,10 +192,10 @@ export default function InformationSection({ showNavigation = true, interview: p
       setCurrentInterview(updatedInterview)
       
       console.log("Interview updated successfully:", updatedInterview)
-      alert("면접 정보가 성공적으로 저장되었습니다!")
+      toast.success("면접 정보가 성공적으로 저장되었습니다!")
     } catch (error) {
       console.error("Error updating interview:", error)
-      alert("저장 중 오류가 발생했습니다. 다시 시도해주세요.")
+      toast.error("저장 중 오류가 발생했습니다. 다시 시도해주세요.")
     } finally {
       setIsSubmitting(false)
     }
