@@ -110,6 +110,7 @@ export async function POST(request: NextRequest) {
     console.log('Answer generation job queued:', job.id)
     return NextResponse.json({
       jobId: job.id,
+      createdAt: job.created_at || new Date().toISOString(),
       success: true,
       message: 'Answer generation started'
     })

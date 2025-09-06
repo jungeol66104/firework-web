@@ -39,9 +39,20 @@ export const createJobsSlice = (set: any, get: any): JobsSlice => ({
   pollingInterval: null,
   completionCallbacks: {},
   
-  addActiveJob: (job) => set((state: any) => ({
-    activeJobs: [job, ...state.activeJobs]
-  })),
+  addActiveJob: (job) => set((state: any) => {
+    // Prevent duplicates
+    const exists = state.activeJobs.some((existingJob: GenerationJob) => existingJob.id === job.id)
+    if (exists) {
+      console.log(`🔄 [Jobs] Job ${job.id} already exists in active jobs, skipping add`)
+      return state
+    }
+    console.log(`✅ [Jobs] Adding job ${job.id} to active jobs (status: ${job.status})`)
+    const newState = {
+      activeJobs: [job, ...state.activeJobs]
+    }
+    console.log(`✅ [Jobs] New active jobs count: ${newState.activeJobs.length}`)
+    return newState
+  }),
   
   updateJob: (jobId, updates) => set((state: any) => ({
     activeJobs: state.activeJobs.map((job: GenerationJob) => 
@@ -56,10 +67,42 @@ export const createJobsSlice = (set: any, get: any): JobsSlice => ({
   setActiveJobs: (jobs) => set({ activeJobs: jobs }),
   
   startPolling: (intervalMs = 5000) => {
+    console.log('🚀🚀🚀 [Polling] startPolling() called! 🚀🚀🚀')
     const state = get()
+    console.log(`🚀 [Polling] Current state - activeJobs: ${state.activeJobs.length}, isPolling: ${state.isPolling}`)
     if (state.pollingInterval) {
+      console.log('🚀 [Polling] Clearing existing polling interval')
       clearInterval(state.pollingInterval)
     }
+    
+    // First, refresh active jobs from server to catch any we missed
+    const refreshActiveJobs = async () => {
+      try {
+        console.log('[Polling] Refreshing active jobs from server...')
+        const response = await fetch('/api/jobs/active')
+        if (response.ok) {
+          const data = await response.json()
+          const serverJobs = data.jobs || []
+          const currentState = get()
+          
+          // Merge server jobs with current jobs (avoid duplicates)
+          const existingJobIds = new Set(currentState.activeJobs.map((j: GenerationJob) => j.id))
+          const newJobs = serverJobs.filter((job: GenerationJob) => !existingJobIds.has(job.id))
+          
+          if (newJobs.length > 0) {
+            console.log(`[Polling] Adding ${newJobs.length} new jobs from server:`, newJobs.map((j: GenerationJob) => j.id))
+            set((state: any) => ({
+              activeJobs: [...state.activeJobs, ...newJobs]
+            }))
+          }
+        }
+      } catch (error) {
+        console.error('[Polling] Error refreshing active jobs:', error)
+      }
+    }
+    
+    // Refresh jobs first, then start interval
+    refreshActiveJobs()
     
     const interval = setInterval(async () => {
       const currentState = get()
@@ -79,18 +122,18 @@ export const createJobsSlice = (set: any, get: any): JobsSlice => ({
       
       console.log(`[Polling] Checking ${jobsToCheck.length} total jobs (${pendingJobs.length} pending):`, jobsToCheck.map((j: GenerationJob) => ({ id: j.id, status: j.status, type: j.type })))
       
-      // Poll each job (including completed ones to catch final status updates)
-      for (const job of jobsToCheck) {
+      // Poll only pending jobs to check for completion
+      for (const job of pendingJobs) {
         try {
           console.log(`[Polling] Fetching status for job ${job.id} (current status: ${job.status})`)
           const response = await fetch(`/api/jobs/${job.id}`)
           if (response.ok) {
             const data = await response.json()
             console.log(`[Polling] Job ${job.id} status updated:`, data.job.status)
-            currentState.updateJob(job.id, data.job)
             
-            // If job completed or failed, call completion callbacks
-            if (data.job.status === 'completed' || data.job.status === 'failed') {
+            // If job completed or failed, call completion callbacks BEFORE updating job
+            if ((data.job.status === 'completed' || data.job.status === 'failed') && 
+                (job.status === 'queued' || job.status === 'processing')) {
               console.log(`[Polling] Job ${job.id} ${data.job.status}! Calling completion callbacks...`)
               const state = get()
               const callbackCount = Object.keys(state.completionCallbacks).length
@@ -107,6 +150,9 @@ export const createJobsSlice = (set: any, get: any): JobsSlice => ({
               // Remove completed/failed jobs from activeJobs after callbacks
               console.log(`[Polling] Removing completed job ${job.id} from active jobs`)
               currentState.removeJob(job.id)
+            } else {
+              // Just update status for non-completion updates
+              currentState.updateJob(job.id, data.job)
             }
           } else {
             console.log(`[Polling] Failed to fetch job ${job.id}:`, response.status, response.statusText)
@@ -115,6 +161,9 @@ export const createJobsSlice = (set: any, get: any): JobsSlice => ({
           console.error('Error polling job status:', error)
         }
       }
+      
+      // Also refresh server jobs periodically to catch any new ones
+      await refreshActiveJobs()
     }, intervalMs)
     
     set({ pollingInterval: interval, isPolling: true })

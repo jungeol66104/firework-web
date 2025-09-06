@@ -32,7 +32,7 @@ const createQuestionColumns = (onDelete?: (id: string) => Promise<void>, onSetCu
       const question = row.getValue("question") as string
       
       if (item.isJob) {
-        const statusText = item.status === 'processing' ? '생성 중...' : '대기 중...'
+        const statusText = item.status === 'processing' || item.status === 'progress' ? '생성 중...' : '대기 중...'
         const commentText = question.includes('(') ? question.match(/\(([^)]+)\)/)?.[1] : ''
         
         return (
@@ -51,7 +51,24 @@ const createQuestionColumns = (onDelete?: (id: string) => Promise<void>, onSetCu
     header: () => <div className="w-9 min-w-9 max-w-9">생성일</div>,
     cell: ({ row }) => {
       const date = row.getValue("created_at") as string
-      const formattedDate = date ? new Date(date).toISOString().split('T')[0] : ''
+      
+      // Handle different date formats properly without timezone conversion
+      let formattedDate = ''
+      if (date) {
+        try {
+          // If date includes timezone info, use it directly
+          if (date.includes('T')) {
+            formattedDate = date.split('T')[0]
+          } else {
+            // For database timestamps like "2025-09-03 08:37:41.60393"
+            formattedDate = date.split(' ')[0]
+          }
+        } catch (error) {
+          console.error('Error formatting date:', error)
+          formattedDate = date.split(' ')[0] || date.split('T')[0] || ''
+        }
+      }
+      
       return <div className="w-9 min-w-9 max-w-9">{formattedDate}</div>
     },
   },

@@ -165,7 +165,7 @@ export default function QuestionsSection({ showNavigation = true }: QuestionsSec
     setQuestionsLoading(false)
   }, [interviewId, setCurrentQuestion, setCurrentQuestionId, setQuestionsLoading])
 
-  // Fetch history data and tokens on mount
+  // Fetch history data on mount only
   React.useEffect(() => {
     fetchHistoryData()
   }, [])
@@ -179,15 +179,15 @@ export default function QuestionsSection({ showNavigation = true }: QuestionsSec
       console.log(`[Questions] Completion callback triggered for job:`, job)
       if (job.type === 'question' && job.interview_id === interviewId) {
         if (job.status === 'completed') {
-          console.log(`[Questions] Job completed! Showing toast and refreshing data`)
+          console.log(`[Questions] Job completed! Showing toast and refreshing tokens`)
           toast.success("질문 생성이 완료되었습니다!")
-          // Refresh history data to show the new question
-          fetchHistoryData()
+          // Refresh tokens to show updated count (1 token spent)
+          refreshTokens()
+          // Note: Smart polling will handle UI updates without full refresh
         } else if (job.status === 'failed') {
-          console.log(`[Questions] Job failed! Showing error toast and refreshing data`)
+          console.log(`[Questions] Job failed! Showing error toast`)
           toast.error("질문 생성에 실패했습니다. 다시 시도해주세요.")
-          // Still refresh to remove the job from the list
-          fetchHistoryData()
+          // Note: Smart polling will handle removing failed jobs from UI
         }
       } else {
         console.log(`[Questions] Job doesn't match criteria - type: ${job.type}, interview_id: ${job.interview_id}, expected: ${interviewId}`)
@@ -203,6 +203,84 @@ export default function QuestionsSection({ showNavigation = true }: QuestionsSec
 
   // Remove local token fetching - now handled by global state
 
+  // Smart polling for specific jobs without UI flash
+  const startJobPolling = (jobId: string) => {
+    console.log(`[Questions] Starting smart polling for job ${jobId}`)
+    
+    const pollJob = async () => {
+      try {
+        const response = await fetch(`/api/jobs/${jobId}`)
+        if (response.ok) {
+          const data = await response.json()
+          const job = data.job
+          
+          console.log(`[Questions] Job ${jobId} status: ${job.status}`)
+          
+          if (job.status === 'completed') {
+            // Replace the job row with actual questions without flash
+            console.log('[Questions] Job completed! Updating UI without refresh')
+            
+            // Fetch only the new questions for this completed job
+            const questionsResponse = await fetchInterviewQuestionsClient(interviewId as string)
+            const newQuestion = questionsResponse.find(q => q.id === job.result?.question_id)
+            
+            if (newQuestion) {
+              // Replace the job item with the actual question
+              setHistoryData(prev => prev.map(item => 
+                item.id === jobId 
+                  ? {
+                      id: newQuestion.id,
+                      question: newQuestion.question_data ? getSecondAndThirdQuestions(newQuestion.question_data) : "새 질문이 생성되었습니다",
+                      created_at: newQuestion.created_at
+                    }
+                  : item
+              ))
+              
+              // Refresh tokens to show updated count (1 token spent)
+              refreshTokens()
+              // Note: Toast success is handled by completion callback to avoid duplicates
+            }
+            return true // Stop polling
+          } else if (job.status === 'failed') {
+            // Remove the failed job from UI
+            setHistoryData(prev => prev.filter(item => item.id !== jobId))
+            toast.error("질문 생성에 실패했습니다. 다시 시도해주세요.")
+            return true // Stop polling
+          } else {
+            // Update status without changing the row
+            setHistoryData(prev => prev.map(item => 
+              item.id === jobId 
+                ? { ...item, status: job.status, question: `🔄 ${job.status === 'processing' || job.status === 'progress' ? '생성 중...' : '대기 중...'} ${item.question.includes('(') ? item.question.match(/\(([^)]+)\)/)?.[0] || '' : ''}` }
+                : item
+            ))
+            return false // Continue polling
+          }
+        }
+      } catch (error) {
+        console.error(`[Questions] Error polling job ${jobId}:`, error)
+        return false // Continue polling on error
+      }
+      return false
+    }
+    
+    // Poll immediately, then every 3 seconds
+    const intervalId = setInterval(async () => {
+      const shouldStop = await pollJob()
+      if (shouldStop) {
+        clearInterval(intervalId)
+        console.log(`[Questions] Stopped polling for job ${jobId}`)
+      }
+    }, 3000)
+    
+    // Initial poll
+    pollJob().then(shouldStop => {
+      if (shouldStop) {
+        clearInterval(intervalId)
+        console.log(`[Questions] Job ${jobId} completed immediately`)
+      }
+    })
+  }
+
   const fetchHistoryData = async () => {
     setLoadingHistory(true)
     try {
@@ -216,23 +294,40 @@ export default function QuestionsSection({ showNavigation = true }: QuestionsSec
       const questionJobs = activeJobs.filter(job => job.type === 'question')
       
       // Convert jobs to display format
-      const jobsData: QuestionHistory[] = questionJobs.map(job => ({
-        id: job.id,
-        question: `🔄 ${job.status === 'processing' ? '생성 중...' : '대기 중...'} ${job.comment ? `(${job.comment})` : ''}`,
-        created_at: job.created_at,
-        status: job.status,
-        isJob: true
-      }))
+      const jobsData: QuestionHistory[] = questionJobs.map(job => {
+        console.log(`[Questions] Active Job ${job.id} created_at from API:`, job.created_at)
+        return {
+          id: job.id,
+          question: `🔄 ${job.status === 'processing' || job.status === 'progress' ? '생성 중...' : '대기 중...'} ${job.comment ? `(${job.comment})` : ''}`,
+          created_at: job.created_at,
+          status: job.status,
+          isJob: true
+        }
+      })
 
       // Convert questions to display format
-      const questionsData: QuestionHistory[] = questions.map(q => ({
-        id: q.id,
-        question: q.question_data ? getSecondAndThirdQuestions(q.question_data) : (q.question_text || "질문 없음"),
-        created_at: q.created_at
-      }))
+      const questionsData: QuestionHistory[] = questions.map(q => {
+        console.log(`[Questions] Question ${q.id} created_at from API:`, q.created_at)
+        return {
+          id: q.id,
+          question: q.question_data ? getSecondAndThirdQuestions(q.question_data) : (q.question_text || "질문 없음"),
+          created_at: q.created_at
+        }
+      })
 
       // Combine with jobs at the top
       setHistoryData([...jobsData, ...questionsData])
+
+      // Start smart polling for any existing active jobs
+      if (questionJobs.length > 0) {
+        console.log(`[Questions] Found ${questionJobs.length} active question jobs`)
+        questionJobs.forEach(job => {
+          if (job.status === 'queued' || job.status === 'processing') {
+            console.log(`[Questions] Starting polling for existing job ${job.id}`)
+            startJobPolling(job.id)
+          }
+        })
+      }
     } catch (e) {
       console.error("Failed to fetch history:", e)
       setHistoryData([])
@@ -335,44 +430,27 @@ export default function QuestionsSection({ showNavigation = true }: QuestionsSec
         return
       }
 
-    // Check for active jobs FIRST before showing confirmation dialog
+    // Check for active jobs FIRST, then show confirmation dialog
     try {
-      const response = await fetch('/api/ai/question', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          interviewId: interviewId as string,
-          comment: form.getValues("comment"),
-          questionId: currentQuestionId || undefined
-        })
-      })
-      
-      if (response.status === 409) {
-        const data = await response.json()
-        if (data.activeJob) {
-          setActiveJobInfo(data.activeJob)
+      // Just check if there are active jobs, don't create yet
+      const checkResponse = await fetch('/api/jobs/active')
+      if (checkResponse.ok) {
+        const data = await checkResponse.json()
+        const activeQuestionJobs = data.jobs?.filter((job: any) => job.type === 'question') || []
+        
+        if (activeQuestionJobs.length > 0) {
+          const activeJob = activeQuestionJobs[0]
+          setActiveJobInfo(activeJob)
           setShowCancelJobDialog(true)
           setIsGenerateLoading(false)
           return
         }
-      } else if (response.ok) {
-        // No active job, proceed with normal confirmation
-        setPendingAction(() => async () => {
-          // Just show success since job was already created
-          const result = await response.json()
-          toast.success("질문 생성을 시작했습니다! 완료되면 표시됩니다.")
-          form.reset({ comment: "" })
-          fetchHistoryData()
-        })
-        setShowConfirmationDialog(true)
-        setIsGenerateLoading(false)
-        return
       }
     } catch (error) {
       console.error("Error checking for active jobs:", error)
     }
 
-    // Fallback to old behavior
+    // No active job, show confirmation dialog
     setPendingAction(() => async () => {
       try {
         const comment = form.getValues("comment")
@@ -386,6 +464,8 @@ export default function QuestionsSection({ showNavigation = true }: QuestionsSec
         )
         
         console.log("Job queued successfully:", response)
+        console.log("API returned createdAt:", response.createdAt)
+        console.log("Current date for comparison:", new Date().toISOString())
         
         // Add job to active jobs and start polling
         addActiveJob({
@@ -395,7 +475,7 @@ export default function QuestionsSection({ showNavigation = true }: QuestionsSec
           type: 'question',
           status: 'queued',
           comment: comment || undefined,
-          created_at: new Date().toISOString()
+          created_at: response.createdAt
         })
         
         // Start polling for job updates
@@ -407,8 +487,18 @@ export default function QuestionsSection({ showNavigation = true }: QuestionsSec
         // Show success message
         toast.success("질문 생성을 시작했습니다! 완료되면 표시됩니다.")
         
-        // Refresh history data to show the new job in progress
-        fetchHistoryData()
+        // Add the job to the UI immediately without full refresh
+        const newJobItem = {
+          id: response.jobId,
+          question: `🔄 생성 중... ${comment ? `(${comment})` : ''}`,
+          created_at: response.createdAt,
+          status: 'queued' as any,
+          isJob: true
+        }
+        setHistoryData(prev => [newJobItem, ...prev])
+        
+        // Start smart polling for this specific job
+        startJobPolling(response.jobId)
         
       } catch (error: any) {
         console.error("Failed to start question generation:", error)
@@ -504,20 +594,14 @@ export default function QuestionsSection({ showNavigation = true }: QuestionsSec
                 <div className="mb-4 flex flex-col gap-2">
                   <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">질문</label>
                   <div 
-                    className={`h-[400px] overflow-y-auto p-3 border border-gray-300 rounded-md ${
-                      (currentQuestionData || (currentQuestion && currentQuestion !== "기본 정보의 필수 항목을 저장한 후 질문을 생성해주세요" && currentQuestion !== "질문을 불러오지 못했습니다"))
-                        ? "bg-white"
-                        : "bg-zinc-100"
-                    }`}
+                    className="h-[500px] overflow-y-auto p-3 border border-gray-300 rounded-md bg-white"
                   >
-                    {loadingQuestion ? (
-                      <div className="text-gray-500">질문을 불러오는 중...</div>
-                    ) : currentQuestionData ? (
-                      formatQuestionDataAsHTML(currentQuestionData)
-                    ) : currentQuestion ? (
-                      <div className="text-black whitespace-pre-wrap">{currentQuestion}</div>
+                    {(loadingQuestion || !currentQuestionData) ? (
+                      <div className="flex items-center justify-center h-full">
+                        <Loader className="h-4 w-4 animate-spin text-black" />
+                      </div>
                     ) : (
-                      <div className="text-gray-500">기본 정보의 필수 항목을 저장한 후 질문을 생성해주세요</div>
+                      formatQuestionDataAsHTML(currentQuestionData)
                     )}
                   </div>
                 </div>

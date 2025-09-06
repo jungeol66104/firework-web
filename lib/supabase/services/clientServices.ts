@@ -190,8 +190,7 @@ export async function generateQuestionClient(interviewId: string, comment?: stri
 
   const result = await response.json()
   console.log("generateQuestion result:", result)
-  console.log("Question object:", result.question)
-  return result.question
+  return result
 }
 
 // Generate answer using AI
@@ -218,8 +217,7 @@ export async function generateAnswerClient(interviewId: string, questionId: stri
 
   const result = await response.json()
   console.log("generateAnswer result:", result)
-  console.log("Answer object:", result.answer)
-  return result.answer
+  return result
 }
 
 // Interview Answers client functions

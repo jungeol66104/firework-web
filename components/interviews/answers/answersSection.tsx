@@ -180,12 +180,12 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
       if (job.type === 'answer' && job.interview_id === interviewId) {
         if (job.status === 'completed') {
           toast.success("답변 생성이 완료되었습니다!")
-          // Refresh history data to show the new answer
-          fetchHistoryData()
+          // Refresh tokens to show updated count (2 tokens spent)
+          refreshTokens()
+          // Note: Smart polling will handle UI updates without full refresh
         } else if (job.status === 'failed') {
           toast.error("답변 생성에 실패했습니다. 다시 시도해주세요.")
-          // Still refresh to remove the job from the list
-          fetchHistoryData()
+          // Note: Smart polling will handle removing failed jobs from UI
         }
       }
     })
@@ -282,6 +282,12 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
       setCurrentAnswerData(null)
       
       fetchHistoryData()
+    } else {
+      // If no question is selected (e.g., question was deleted), clear answer selection too
+      setCurrentAnswerId("")
+      setCurrentAnswer("")
+      setCurrentAnswerData(null)
+      setHistoryData([])
     }
   }, [currentQuestionId])
 
@@ -292,6 +298,87 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
     }
   }, [currentQuestionId, historyData.length])
 
+
+
+  // Smart polling for specific jobs without UI flash
+  const startJobPolling = (jobId: string) => {
+    console.log(`[Answers] Starting smart polling for job ${jobId}`)
+    
+    const pollJob = async () => {
+      try {
+        const response = await fetch(`/api/jobs/${jobId}`)
+        if (response.ok) {
+          const data = await response.json()
+          const job = data.job
+          
+          console.log(`[Answers] Job ${jobId} status: ${job.status}`)
+          
+          if (job.status === 'completed') {
+            // Replace the job row with actual answer without flash
+            console.log('[Answers] Job completed! Updating UI without refresh')
+            
+            // Fetch only the new answers for this completed job
+            const answersResponse = await fetchInterviewAnswersClient(interviewId as string, currentQuestionId)
+            const newAnswer = answersResponse.find(a => a.id === job.result?.answer_id)
+            
+            if (newAnswer) {
+              // Replace the job item with the actual answer
+              setHistoryData(prev => prev.map(item => 
+                item.id === jobId 
+                  ? {
+                      id: newAnswer.id,
+                      answer: newAnswer.answer_data ? getSecondAndThirdAnswers(newAnswer.answer_data) : "새 답변이 생성되었습니다",
+                      created_at: newAnswer.created_at,
+                      question_id: newAnswer.question_id,
+                      answer_data: newAnswer.answer_data
+                    }
+                  : item
+              ))
+              
+              // Refresh tokens to show updated count (2 tokens spent)
+              refreshTokens()
+              // Note: Toast success is handled by completion callback to avoid duplicates
+            }
+            return true // Stop polling
+          } else if (job.status === 'failed') {
+            // Remove the failed job from UI
+            setHistoryData(prev => prev.filter(item => item.id !== jobId))
+            toast.error("답변 생성에 실패했습니다. 다시 시도해주세요.")
+            return true // Stop polling
+          } else {
+            // Update status without changing the row
+            setHistoryData(prev => prev.map(item => 
+              item.id === jobId 
+                ? { ...item, status: job.status, answer: `🔄 ${job.status === 'processing' || job.status === 'progress' ? '생성 중...' : '대기 중...'} ${item.answer.includes('(') ? item.answer.match(/\(([^)]+)\)/)?.[0] || '' : ''}` }
+                : item
+            ))
+            return false // Continue polling
+          }
+        }
+      } catch (error) {
+        console.error(`[Answers] Error polling job ${jobId}:`, error)
+        return false // Continue polling on error
+      }
+      return false
+    }
+    
+    // Poll immediately, then every 3 seconds
+    const intervalId = setInterval(async () => {
+      const shouldStop = await pollJob()
+      if (shouldStop) {
+        clearInterval(intervalId)
+        console.log(`[Answers] Stopped polling for job ${jobId}`)
+      }
+    }, 3000)
+    
+    // Initial poll
+    pollJob().then(shouldStop => {
+      if (shouldStop) {
+        clearInterval(intervalId)
+        console.log(`[Answers] Job ${jobId} completed immediately`)
+      }
+    })
+  }
 
   const fetchHistoryData = async () => {
     setLoadingHistory(true)
@@ -310,7 +397,7 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
       // Convert jobs to display format
       const jobsData: AnswerHistory[] = answerJobs.map(job => ({
         id: job.id,
-        answer: `🔄 ${job.status === 'processing' ? '생성 중...' : '대기 중...'} ${job.comment ? `(${job.comment})` : ''}`,
+        answer: `🔄 ${job.status === 'processing' || job.status === 'progress' ? '생성 중...' : '대기 중...'} ${job.comment ? `(${job.comment})` : ''}`,
         created_at: job.created_at,
         question_id: job.question_id,
         status: job.status,
@@ -330,6 +417,17 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
 
       // Combine with jobs at the top
       setHistoryData([...jobsData, ...answersData])
+
+      // Start smart polling for any existing active jobs
+      if (answerJobs.length > 0) {
+        console.log(`[Answers] Found ${answerJobs.length} active answer jobs`)
+        answerJobs.forEach(job => {
+          if (job.status === 'queued' || job.status === 'processing') {
+            console.log(`[Answers] Starting polling for existing job ${job.id}`)
+            startJobPolling(job.id)
+          }
+        })
+      }
       
       // Don't auto-select any answer - user must click to select
 
@@ -441,45 +539,27 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
         return
       }
 
-    // Check for active jobs FIRST before showing confirmation dialog
+    // Check for active jobs FIRST, then show confirmation dialog
     try {
-      const response = await fetch('/api/ai/answer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          interviewId: interviewId as string,
-          questionId: currentQuestionId,
-          comment: form.getValues("comment"),
-          answerId: currentAnswerId || undefined
-        })
-      })
-      
-      if (response.status === 409) {
-        const data = await response.json()
-        if (data.activeJob) {
-          setActiveJobInfo(data.activeJob)
+      // Just check if there are active jobs, don't create yet
+      const checkResponse = await fetch('/api/jobs/active')
+      if (checkResponse.ok) {
+        const data = await checkResponse.json()
+        const activeAnswerJobs = data.jobs?.filter((job: any) => job.type === 'answer') || []
+        
+        if (activeAnswerJobs.length > 0) {
+          const activeJob = activeAnswerJobs[0]
+          setActiveJobInfo(activeJob)
           setShowCancelJobDialog(true)
           setIsGenerateLoading(false)
           return
         }
-      } else if (response.ok) {
-        // No active job, proceed with normal confirmation
-        setPendingAction(() => async () => {
-          // Just show success since job was already created
-          const result = await response.json()
-          toast.success("답변 생성을 시작했습니다! 완료되면 표시됩니다.")
-          form.reset({ comment: "" })
-          fetchHistoryData()
-        })
-        setShowConfirmationDialog(true)
-        setIsGenerateLoading(false)
-        return
       }
     } catch (error) {
       console.error("Error checking for active jobs:", error)
     }
 
-    // Fallback to old behavior
+    // No active job, show confirmation dialog
     setPendingAction(() => async () => {
       try {
         const comment = form.getValues("comment")
@@ -494,6 +574,8 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
         )
         
         console.log("Answer job queued successfully:", response)
+        console.log("API returned createdAt:", response.createdAt)
+        console.log("Current date for comparison:", new Date().toISOString())
         
         // Add job to active jobs and start polling
         addActiveJob({
@@ -504,7 +586,7 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
           status: 'queued',
           question_id: currentQuestionId,
           comment: comment || undefined,
-          created_at: new Date().toISOString()
+          created_at: response.createdAt
         })
         
         // Start polling for job updates
@@ -513,11 +595,23 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
         // Clear the comment form
         form.reset({ comment: "" })
         
-        // Show success message
+        // Show success message  
         toast.success("답변 생성을 시작했습니다! 완료되면 표시됩니다.")
         
-        // Refresh history data to show the new job in progress
-        fetchHistoryData()
+        // Add the job to the UI immediately without full refresh
+        const newJobItem = {
+          id: response.jobId,
+          answer: `🔄 생성 중... ${comment ? `(${comment})` : ''}`,
+          created_at: response.createdAt,
+          status: 'queued' as any,
+          isJob: true,
+          question_id: currentQuestionId,
+          answer_data: null
+        }
+        setHistoryData(prev => [newJobItem, ...prev])
+        
+        // Start smart polling for this specific job
+        startJobPolling(response.jobId)
         
       } catch (error: any) {
         console.error("Failed to start answer generation:", error)
@@ -613,14 +707,12 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
                 <div className="mb-4 flex flex-col gap-2">
                   <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">질문과 답변</label>
                   <div 
-                    className={`h-[600px] overflow-y-auto p-3 border border-gray-300 rounded-md ${
-                      (currentAnswerData || (currentAnswer && currentAnswer !== "답변을 선택하면 여기에 표시됩니다" && currentAnswer !== "답변을 불러오지 못했습니다"))
-                        ? "bg-white"
-                        : "bg-zinc-100"
-                    }`}
+                    className="h-[500px] overflow-y-auto p-3 border border-gray-300 rounded-md bg-white"
                   >
-                    {loadingAnswer ? (
-                      <div className="text-gray-500">답변을 불러오는 중...</div>
+                    {(loadingAnswer || !currentAnswerData) ? (
+                      <div className="flex items-center justify-center h-full">
+                        <Loader className="h-4 w-4 animate-spin text-black" />
+                      </div>
                     ) : (
                       formatSelectedQuestionAndAnswer(currentQuestionData, currentAnswerData)
                     )}
