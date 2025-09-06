@@ -62,8 +62,10 @@ export function QuestionDataTable({
         </div>
       ) : (
         <div className="w-full">
-          <div className="rounded-md border w-full">
-            <Table>
+          <div className="rounded-md border overflow-hidden">
+            <div className="overflow-x-auto">
+              <div className={data.length > 0 ? "min-w-[768px]" : ""}>
+                <Table>
               <TableHeader>
                 {table.getHeaderGroups().map((headerGroup) => (
                   <TableRow key={headerGroup.id}>
@@ -127,7 +129,9 @@ export function QuestionDataTable({
                   </TableRow>
                 )}
               </TableBody>
-            </Table>
+                </Table>
+              </div>
+            </div>
           </div>
         </div>
       )}

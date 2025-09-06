@@ -684,7 +684,7 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
 
 
   return (
-    <div id="answers" className="w-full max-w-4xl p-8">
+    <div id="answers" className="w-full max-w-4xl p-4">
               <div className="flex justify-between items-center mb-4">
           <h1 className="text-2xl font-bold">면접 답변</h1>
         </div>

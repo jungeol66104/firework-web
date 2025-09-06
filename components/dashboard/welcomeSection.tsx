@@ -6,7 +6,7 @@ interface WelcomeSectionProps {
 
 export default function WelcomeSection({ userName }: WelcomeSectionProps) {
   return (
-    <div className="w-full max-w-4xl p-8">
+    <div className="w-full max-w-4xl p-4">
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl font-bold">환영합니다, {userName}님.</h1>
       </div>

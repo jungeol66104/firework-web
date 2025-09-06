@@ -15,13 +15,40 @@ export default function DashboardTableOfContents({ className = "" }: DashboardTa
   ]
 
   const scrollToSection = (sectionId: string) => {
-    const element = document.getElementById(sectionId)
-    if (element) {
-      const elementPosition = element.offsetTop - 60
+    const isMobile = window.innerWidth < 640 // sm breakpoint
+    
+    // Get all elements with this ID (there might be duplicates for mobile/desktop)
+    const elements = document.querySelectorAll(`#${sectionId}`)
+    
+    // Find the visible element
+    let targetElement = null
+    for (const element of elements) {
+      const rect = element.getBoundingClientRect()
+      const computedStyle = window.getComputedStyle(element)
+      
+      // Check if element is visible (has dimensions and not display:none)
+      if (rect.width > 0 && rect.height > 0 && computedStyle.display !== 'none') {
+        targetElement = element
+        break
+      }
+    }
+    
+    if (targetElement) {
+      const offset = isMobile ? 96 : 60
+      
+      // Calculate position using getBoundingClientRect for accuracy
+      const rect = targetElement.getBoundingClientRect()
+      const elementTop = rect.top + window.pageYOffset
+      const scrollPosition = Math.max(0, elementTop - offset)
+      
+      console.log('Found visible element for:', sectionId, 'Scrolling to:', scrollPosition)
+      
       window.scrollTo({
-        top: elementPosition,
+        top: scrollPosition,
         behavior: "smooth"
       })
+    } else {
+      console.log('No visible element found for:', sectionId)
     }
   }
 
@@ -33,13 +60,33 @@ export default function DashboardTableOfContents({ className = "" }: DashboardTa
   // Update active section based on scroll position
   useEffect(() => {
     const handleScroll = () => {
-      const scrollPosition = window.scrollY + 100 // Offset for better detection
+      // Adjust detection offset based on screen size
+      const isMobile = window.innerWidth < 640 // sm breakpoint
+      const offset = isMobile ? 120 : 100 // Increased offset for mobile to account for larger header
+      const scrollPosition = window.scrollY + offset
 
       for (const section of sections) {
-        const element = document.getElementById(section.id)
-        if (element) {
-          const { offsetTop, offsetHeight } = element
-          if (scrollPosition >= offsetTop && scrollPosition < offsetTop + offsetHeight) {
+        // Get all elements with this ID and find the visible one
+        const elements = document.querySelectorAll(`#${section.id}`)
+        let visibleElement = null
+        
+        for (const element of elements) {
+          const rect = element.getBoundingClientRect()
+          const computedStyle = window.getComputedStyle(element)
+          
+          // Check if element is visible
+          if (rect.width > 0 && rect.height > 0 && computedStyle.display !== 'none') {
+            visibleElement = element
+            break
+          }
+        }
+        
+        if (visibleElement) {
+          const rect = visibleElement.getBoundingClientRect()
+          const elementTop = rect.top + window.pageYOffset
+          const elementBottom = elementTop + rect.height
+          
+          if (scrollPosition >= elementTop && scrollPosition < elementBottom) {
             setActiveSection(section.id)
             break
           }
@@ -52,13 +99,13 @@ export default function DashboardTableOfContents({ className = "" }: DashboardTa
   }, [sections])
 
   return (
-    <div className={`w-[95px] sticky top-[60px] h-fit py-8 ${className}`}>
-      <nav className="space-y-2">
+    <div className={`sm:w-[95px] w-full sm:sticky sm:top-[60px] sm:z-auto h-9 sm:h-fit py-2 sm:py-4 px-4 sm:px-0 border-b sm:border-b-0 sm:bg-white/40 sm:backdrop-blur-sm ${className}`}>
+      <nav className="sm:space-y-2 flex sm:flex-col space-x-4 sm:space-x-0 h-full items-center sm:items-start">
         {sections.map((section) => (
           <button
             key={section.id}
             onClick={() => handleClick(section.id)}
-            className={`cursor-pointer block w-full text-left text-sm transition-colors duration-200 ${
+            className={`cursor-pointer sm:block sm:w-full sm:text-left text-center text-sm transition-colors duration-200 ${
               activeSection === section.id
                 ? "text-black font-medium"
                 : "text-gray-500 hover:text-gray-700"

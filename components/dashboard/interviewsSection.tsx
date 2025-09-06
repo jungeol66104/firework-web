@@ -104,7 +104,7 @@ export default function InterviewsSection() {
   // Don't render until hydrated to prevent hydration mismatch
   if (!isHydrated) {
     return (
-      <div id="interviews" className="w-full max-w-4xl p-8">
+      <div id="interviews" className="w-full max-w-4xl p-4">
         <div className="flex justify-between items-center mb-4">
           <h1 className="text-2xl font-bold">면접 내역</h1>
           <CreateInterviewButton onInterviewCreated={handleInterviewCreated} className="bg-white text-black border border-gray-300 hover:bg-gray-50" size="sm"/>
@@ -117,7 +117,7 @@ export default function InterviewsSection() {
   }
 
   return (
-    <div id="interviews" className="w-full max-w-4xl p-8">
+    <div id="interviews" className="w-full max-w-4xl p-4">
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl font-bold">면접 내역</h1>
         <CreateInterviewButton onInterviewCreated={handleInterviewCreated} className="bg-white text-black border border-gray-300 hover:bg-gray-50" size="sm"/>

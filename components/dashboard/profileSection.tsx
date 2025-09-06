@@ -108,7 +108,7 @@ export default function ProfileSection({ userName, userEmail, tokens }: ProfileS
   }
 
   return (
-    <div id="profile" className="w-full max-w-4xl p-8">
+    <div id="profile" className="w-full max-w-4xl p-4">
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl font-bold">프로필</h1>
         {!isEditing ? (

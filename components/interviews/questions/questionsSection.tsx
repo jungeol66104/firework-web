@@ -597,7 +597,7 @@ export default function QuestionsSection({ showNavigation = true }: QuestionsSec
   // Don't render content if loading or if interview doesn't match URL param
   if (loading || (currentInterview && interviewId && currentInterview.id !== interviewId)) {
     return (
-      <div id="questions" className="w-full max-w-4xl p-8">
+      <div id="questions" className="w-full max-w-4xl p-4">
         <div className="flex justify-between items-center mb-4">
           <h1 className="text-2xl font-bold">면접 질문</h1>
         </div>
@@ -609,7 +609,7 @@ export default function QuestionsSection({ showNavigation = true }: QuestionsSec
   }
 
   return (
-    <div id="questions" className="w-full max-w-4xl p-8">
+    <div id="questions" className="w-full max-w-4xl p-4">
         <div className="flex justify-between items-center mb-4">
           <h1 className="text-2xl font-bold">면접 질문</h1>
         </div>

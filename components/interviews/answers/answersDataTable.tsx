@@ -64,8 +64,10 @@ export function AnswerDataTable({
         </div>
       ) : (
         <>
-          <div className="rounded-md border">
-            <Table>
+          <div className="rounded-md border overflow-hidden">
+            <div className="overflow-x-auto">
+              <div className={data.length > 0 ? "min-w-[768px]" : ""}>
+                <Table>
               <TableHeader>
                 {table.getHeaderGroups().map((headerGroup) => (
                   <TableRow key={headerGroup.id}>
@@ -129,7 +131,9 @@ export function AnswerDataTable({
                   </TableRow>
                 )}
               </TableBody>
-            </Table>
+                </Table>
+              </div>
+            </div>
           </div>
         </>
       )}

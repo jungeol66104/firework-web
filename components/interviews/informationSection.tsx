@@ -237,7 +237,7 @@ export default function InformationSection({ showNavigation = true, interview: p
   // Don't render content if loading or if interview doesn't match URL param
   if (loading || (currentInterview && interviewId && currentInterview.id !== interviewId)) {
     return (
-      <div id="information" className="w-full max-w-4xl p-8">
+      <div id="information" className="w-full max-w-4xl p-4">
         <h1 className="text-2xl font-bold mb-4">기본 정보</h1>
         <div className="flex justify-center items-center h-32">
           <Loader className="h-4 w-4 animate-spin" />
@@ -247,7 +247,7 @@ export default function InformationSection({ showNavigation = true, interview: p
   }
 
   return (
-    <div id="information" className="w-full max-w-4xl p-8">
+    <div id="information" className="w-full max-w-4xl p-4">
       <h1 className="text-2xl font-bold mb-4">기본 정보</h1>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)}>
