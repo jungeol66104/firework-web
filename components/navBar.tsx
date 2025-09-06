@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { Hexagon, Radical } from "lucide-react";
+import { Hexagon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getCurrentUserClient, getCurrentUserProfileClient } from "@/lib/supabase/services/clientServices";
 import { useTokens, useRefreshTokens } from "@/lib/zustand";
@@ -47,8 +47,7 @@ export const NavBar: React.FC = () => {
 
   return (
     <div className="sticky top-0 z-10 w-full max-w-4xl h-[60px] mx-auto px-8 bg-white/40 backdrop-blur-sm flex items-center justify-between">
-      <Link href="/dashboard" className="flex items-center gap-2 text-lg font-bold">
-        <Radical className="w-6 h-6" />
+      <Link href="/dashboard" className="text-lg font-bold">
         빅토리 포뮬러
       </Link>
       

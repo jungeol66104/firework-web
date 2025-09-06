@@ -51,11 +51,31 @@ export async function signup(formData: FormData) {
   const data = { email, password, options: { data: { name } } }
 
   try {
-    const { data: authData, error: authError } = await supabase.auth.signUp(data)
+    // Add a timeout wrapper for the signup request
+    const signupPromise = supabase.auth.signUp(data)
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('요청 시간이 초과되었습니다. 다시 시도해주세요.')), 30000)
+    })
+    
+    const { data: authData, error: authError } = await Promise.race([signupPromise, timeoutPromise]) as any
 
     if (authError) {
       console.error('Auth signup error:', authError)
-      throw new Error(authError.message || 'Signup failed')
+      
+      // Handle specific error types
+      if (authError.status === 504) {
+        throw new Error('서버 연결 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.')
+      }
+      
+      if (authError.status === 422) {
+        throw new Error('이미 사용 중인 이메일입니다.')
+      }
+      
+      // Use a meaningful message even if authError.message is empty
+      const errorMessage = authError.message?.trim() || 
+        (authError.status ? `서버 오류 (${authError.status})가 발생했습니다.` : '회원가입에 실패했습니다.')
+      
+      throw new Error(errorMessage)
     }
 
     if (!authData.user) {

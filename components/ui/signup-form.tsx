@@ -11,10 +11,13 @@ import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { signupSchema, type SignupFormData } from "@/lib/validations"
+import { Eye, EyeOff } from "lucide-react"
 
 export function SignupForm({ className, ...props }: React.ComponentProps<"div">) {
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
   const {
     register,
@@ -87,12 +90,25 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
               </div>
               <div className="grid gap-3">
                 <Label htmlFor="password">비밀번호</Label>
-                <Input 
-                  id="password" 
-                  type="password" 
-                  {...register('password')}
-                  className={errors.password ? 'border-red-500' : ''}
-                />
+                <div className="relative">
+                  <Input 
+                    id="password" 
+                    type={showPassword ? "text" : "password"}
+                    {...register('password')}
+                    className={cn("pr-10", errors.password ? 'border-red-500' : '')}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 cursor-pointer"
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
                 {errors.password && (
                   <p className="text-sm text-red-600">{errors.password.message}</p>
                 )}
@@ -102,12 +118,25 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
               </div>
               <div className="grid gap-3">
                 <Label htmlFor="confirmPassword">비밀번호 확인</Label>
-                <Input 
-                  id="confirmPassword" 
-                  type="password" 
-                  {...register('confirmPassword')}
-                  className={errors.confirmPassword ? 'border-red-500' : ''}
-                />
+                <div className="relative">
+                  <Input 
+                    id="confirmPassword" 
+                    type={showConfirmPassword ? "text" : "password"}
+                    {...register('confirmPassword')}
+                    className={cn("pr-10", errors.confirmPassword ? 'border-red-500' : '')}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 cursor-pointer"
+                  >
+                    {showConfirmPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
                 {errors.confirmPassword && (
                   <p className="text-sm text-red-600">{errors.confirmPassword.message}</p>
                 )}

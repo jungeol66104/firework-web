@@ -6,6 +6,28 @@ import { createAnswersSlice, AnswersSlice } from './slices/answersSlice'
 import { createTokenSlice, TokenSlice } from './slices/tokenSlice'
 import { createJobsSlice, JobsSlice } from './slices/jobsSlice'
 
+// Helper function to get current user ID from localStorage or other auth source
+function getCurrentUserIdFromAuth(): string | null {
+  try {
+    // Check for Supabase session in localStorage
+    const supabaseKeys = Object.keys(localStorage).filter(key => 
+      key.startsWith('sb-') && key.includes('auth-token')
+    )
+    
+    if (supabaseKeys.length > 0) {
+      const authData = localStorage.getItem(supabaseKeys[0])
+      if (authData) {
+        const parsed = JSON.parse(authData)
+        return parsed?.user?.id || null
+      }
+    }
+    
+    return null
+  } catch {
+    return null
+  }
+}
+
 // Combined store type
 interface Store extends InterviewSlice, QuestionsSlice, AnswersSlice, TokenSlice, JobsSlice {}
 
@@ -32,7 +54,39 @@ export const useStore = create<Store>()(
           currentAnswer: state.currentAnswer,
           tokens: state.tokens,
           lastFetched: state.lastFetched,
+          currentUserId: state.currentUserId,
         }),
+        // Override storage to handle user switching
+        storage: {
+          getItem: (name: string) => {
+            const item = localStorage.getItem(name)
+            if (!item) return null
+            
+            try {
+              const data = JSON.parse(item)
+              
+              // Check if we have user data and if it matches current user
+              if (typeof window !== 'undefined') {
+                const currentUserId = getCurrentUserIdFromAuth()
+                if (data.state?.currentUserId && data.state.currentUserId !== currentUserId) {
+                  // Different user, clear the cache and return null
+                  localStorage.removeItem(name)
+                  return null
+                }
+              }
+              
+              return data
+            } catch {
+              return null
+            }
+          },
+          setItem: (name: string, value: any) => {
+            localStorage.setItem(name, JSON.stringify(value))
+          },
+          removeItem: (name: string) => {
+            localStorage.removeItem(name)
+          },
+        },
       }
     ),
     {

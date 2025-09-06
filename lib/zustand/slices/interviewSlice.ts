@@ -4,6 +4,7 @@ export interface InterviewSlice {
   currentInterview: Interview | null
   interviews: Interview[]
   isLoading: boolean
+  currentUserId: string | null
   
   // Actions
   setCurrentInterview: (interview: Interview | null) => void
@@ -12,6 +13,7 @@ export interface InterviewSlice {
   updateInterview: (id: string, updates: Partial<Interview>) => void
   removeInterview: (id: string) => void
   setLoading: (loading: boolean) => void
+  setCurrentUserId: (userId: string | null) => void
   reset: () => void
 }
 
@@ -19,6 +21,7 @@ export const createInterviewSlice = (set: any, get: any): InterviewSlice => ({
   currentInterview: null,
   interviews: [],
   isLoading: false,
+  currentUserId: null,
   
   setCurrentInterview: (interview) => set({ currentInterview: interview }),
   setInterviews: (interviews) => set({ interviews }),
@@ -40,9 +43,11 @@ export const createInterviewSlice = (set: any, get: any): InterviewSlice => ({
       : state.currentInterview
   })),
   setLoading: (loading) => set({ isLoading: loading }),
+  setCurrentUserId: (userId) => set({ currentUserId: userId }),
   reset: () => set({ 
     currentInterview: null, 
     interviews: [], 
-    isLoading: false 
+    isLoading: false,
+    currentUserId: null
   }),
 })

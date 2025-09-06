@@ -13,6 +13,7 @@ import { toast } from "sonner"
 import { updateCurrentUserProfileClient } from "@/lib/supabase/services/clientServices"
 import { deleteUserAccount, signout } from "@/app/auth/actions"
 import { usePaymentPopup } from "@/hooks/usePaymentPopup"
+import { useStore } from "@/lib/zustand"
 
 interface ProfileSectionProps {
   userName: string
@@ -30,6 +31,7 @@ export default function ProfileSection({ userName, userEmail, tokens }: ProfileS
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const router = useRouter()
   const { openPaymentPopup } = usePaymentPopup()
+  const reset = useStore((state) => state.reset)
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -65,6 +67,12 @@ export default function ProfileSection({ userName, userEmail, tokens }: ProfileS
       const result = await deleteUserAccount()
       
       if (result.success) {
+        // Clear the Zustand store
+        reset()
+        
+        // Clear localStorage store manually as well
+        localStorage.removeItem('interview-store')
+        
         toast.success("계정이 성공적으로 삭제되었습니다")
         // Redirect to signin page
         router.push('/auth/signin')
@@ -83,6 +91,12 @@ export default function ProfileSection({ userName, userEmail, tokens }: ProfileS
   const handleLogout = async () => {
     setIsLoggingOut(true)
     try {
+      // Clear the Zustand store first
+      reset()
+      
+      // Clear localStorage store manually as well
+      localStorage.removeItem('interview-store')
+      
       await signout()
       // The server action will handle the redirect, but we show a toast just in case
       toast.success("로그아웃되었습니다")

@@ -17,6 +17,9 @@ export default function InterviewsSection() {
   const setLoading = useStore((state) => state.setLoading)
   const addInterview = useStore((state) => state.addInterview)
   const removeInterview = useStore((state) => state.removeInterview)
+  const setCurrentUserId = useStore((state) => state.setCurrentUserId)
+  const reset = useStore((state) => state.reset)
+  const currentUserId = useStore((state) => state.currentUserId)
   
   const [userId, setUserId] = useState<string | null>(null)
   const [hasInitialized, setHasInitialized] = useState(false)
@@ -27,15 +30,24 @@ export default function InterviewsSection() {
     setIsHydrated(true)
   }, [])
 
-  // Get current user
+  // Get current user and reset store if user changed
   useEffect(() => {
     const getCurrentUser = async () => {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
-      setUserId(user?.id || null)
+      const newUserId = user?.id || null
+      
+      // If user changed, reset the store
+      if (currentUserId && currentUserId !== newUserId) {
+        reset()
+        setHasInitialized(false)
+      }
+      
+      setUserId(newUserId)
+      setCurrentUserId(newUserId)
     }
     getCurrentUser()
-  }, [])
+  }, [setCurrentUserId, reset, currentUserId])
 
   // Fetch initial data only if we don't have data and haven't initialized yet
   useEffect(() => {
