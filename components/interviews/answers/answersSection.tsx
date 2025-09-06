@@ -318,7 +318,7 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
             console.log('[Answers] Job completed! Updating UI without refresh')
             
             // Fetch only the new answers for this completed job
-            const answersResponse = await fetchInterviewAnswersClient(interviewId as string, currentQuestionId)
+            const answersResponse = await fetchInterviewAnswersClient(interviewId as string)
             const newAnswer = answersResponse.find(a => a.id === job.result?.answer_id)
             
             if (newAnswer) {
