@@ -43,15 +43,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check if user already has an active question generation job
+    // Check if user already has any active generation job
     const jobManager = createJobManager(supabase)
-    const activeJob = await jobManager.getActiveJobForUser(user.id, 'question')
+    const activeJob = await jobManager.getAnyActiveJobForUser(user.id)
     if (activeJob) {
+      const jobTypeText = activeJob.type === 'question' ? '질문' : '답변'
       return NextResponse.json(
         { 
-          error: 'Question generation already in progress',
+          error: `이미 ${jobTypeText} 생성이 진행 중입니다. 한 번에 하나의 생성 작업만 실행할 수 있습니다.`,
           activeJob: {
             id: activeJob.id,
+            type: activeJob.type,
             status: activeJob.status,
             created_at: activeJob.created_at
           }

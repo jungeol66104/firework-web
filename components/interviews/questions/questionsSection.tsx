@@ -119,6 +119,7 @@ export default function QuestionsSection({ showNavigation = true }: QuestionsSec
   const setCurrentQuestionId = useStore((state) => state.setCurrentQuestionId)
   const setQuestionsLoading = useStore((state) => state.setQuestionsLoading)
   const currentInterview = useCurrentInterview()
+  const loading = useStore((state) => state.isLoading)
   
   // Helper function to check if required basic info fields are filled
   const areRequiredFieldsFilled = () => {
@@ -593,6 +594,20 @@ export default function QuestionsSection({ showNavigation = true }: QuestionsSec
   }
 
 
+  // Don't render content if loading or if interview doesn't match URL param
+  if (loading || (currentInterview && interviewId && currentInterview.id !== interviewId)) {
+    return (
+      <div id="questions" className="w-full max-w-4xl p-8">
+        <div className="flex justify-between items-center mb-4">
+          <h1 className="text-2xl font-bold">면접 질문</h1>
+        </div>
+        <div className="flex justify-center items-center h-32">
+          <Loader className="h-4 w-4 animate-spin" />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div id="questions" className="w-full max-w-4xl p-8">
         <div className="flex justify-between items-center mb-4">
@@ -688,7 +703,7 @@ export default function QuestionsSection({ showNavigation = true }: QuestionsSec
                   </div>
                   <Button
                     type="button"
-                    disabled={hasActiveJob('question') || isGenerateLoading || !areRequiredFieldsFilled()}
+                    disabled={hasActiveJob() || isGenerateLoading || !areRequiredFieldsFilled()}
                     className="px-8 py-2 bg-black text-white hover:bg-zinc-800 disabled:bg-gray-400"
                     onClick={handleGenerate}
                   >
@@ -697,7 +712,7 @@ export default function QuestionsSection({ showNavigation = true }: QuestionsSec
                         <Loader className="h-4 w-4 animate-spin" />
                         <span>준비 중...</span>
                       </div>
-                    ) : hasActiveJob('question') ? (
+                    ) : hasActiveJob() ? (
                       "생성 중..."
                     ) : (
                       currentQuestionId ? "재생성" : "생성"

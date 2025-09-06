@@ -780,7 +780,7 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
                   </div>
                   <Button
                     type="button"
-                    disabled={hasActiveJob('answer') || !currentQuestionId || isGenerateLoading}
+                    disabled={hasActiveJob() || !currentQuestionId || isGenerateLoading}
                     className="px-8 py-2 bg-black text-white hover:bg-zinc-800 disabled:bg-gray-400"
                     onClick={handleGenerate}
                   >
@@ -789,7 +789,7 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
                         <Loader className="h-4 w-4 animate-spin" />
                         <span>준비 중...</span>
                       </div>
-                    ) : hasActiveJob('answer') ? (
+                    ) : hasActiveJob() ? (
                       "생성 중..."
                     ) : (
                       currentAnswerId ? "재생성" : "생성"

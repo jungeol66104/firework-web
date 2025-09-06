@@ -13,6 +13,7 @@ import { Interview } from "@/lib/types"
 import { fetchInterviewByIdClient, getCurrentUserClient, updateInterviewClient } from "@/lib/supabase/services/clientServices"
 import { useCurrentInterview, useStore } from "@/lib/zustand"
 import { toast } from "sonner"
+import { Loader } from "lucide-react"
 
 const formSchema = z.object({
   companyName: z.string().min(1, "기업명을 입력해주세요"),
@@ -79,6 +80,11 @@ export default function InformationSection({ showNavigation = true, interview: p
       if (!interviewId) return
 
       try {
+        // Clear previous interview data immediately when interviewId changes
+        if (currentInterview && currentInterview.id !== interviewId) {
+          setCurrentInterview(null)
+        }
+        
         setLoading(true)
         setError(null)
         
@@ -203,6 +209,18 @@ export default function InformationSection({ showNavigation = true, interview: p
 
 
 
+
+  // Don't render content if loading or if interview doesn't match URL param
+  if (loading || (currentInterview && interviewId && currentInterview.id !== interviewId)) {
+    return (
+      <div id="information" className="w-full max-w-4xl p-8">
+        <h1 className="text-2xl font-bold mb-4">기본 정보</h1>
+        <div className="flex justify-center items-center h-32">
+          <Loader className="h-4 w-4 animate-spin" />
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div id="information" className="w-full max-w-4xl p-8">

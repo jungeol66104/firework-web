@@ -186,6 +186,23 @@ export class JobManager {
     return data
   }
 
+  async getAnyActiveJobForUser(userId: string): Promise<GenerationJob | null> {
+    const { data, error } = await this.supabase
+      .from('generation_jobs')
+      .select('*')
+      .eq('user_id', userId)
+      .in('status', ['queued', 'processing'])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single()
+
+    if (error) {
+      return null
+    }
+
+    return data
+  }
+
   // Cleanup old completed/failed jobs (call this periodically)
   async cleanupOldJobs(olderThanDays: number = 7): Promise<void> {
     const cutoffDate = new Date()
