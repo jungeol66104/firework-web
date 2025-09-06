@@ -14,14 +14,15 @@ import { fetchInterviewByIdClient, getCurrentUserClient, updateInterviewClient }
 import { useCurrentInterview, useStore } from "@/lib/zustand"
 import { toast } from "sonner"
 import { Loader } from "lucide-react"
+import { extractTextFromDocument } from "@/lib/utils/documentExtractor"
 
 const formSchema = z.object({
-  companyName: z.string().min(1, "기업명을 입력해주세요"),
-  position: z.string().min(1, "직무를 입력해주세요"),
-  jobPosting: z.string().min(1, "채용공고를 입력해주세요"),
-  coverLetter: z.string().min(1, "자기소개서를 입력해주세요"),
-  resume: z.string().min(1, "이력서 내용을 입력해주세요"),
-  companyInfo: z.string().min(1, "기업 정보를 입력해주세요"),
+  companyName: z.string().optional(),
+  position: z.string().optional(),
+  jobPosting: z.string().optional(),
+  coverLetter: z.string().optional(),
+  resume: z.string().optional(),
+  companyInfo: z.string().optional(),
   expectedQuestions: z.string().optional(),
   companyEvaluation: z.string().optional(),
   otherNotes: z.string().optional(),
@@ -67,6 +68,7 @@ export default function InformationSection({ showNavigation = true, interview: p
   
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isProcessingDocument, setIsProcessingDocument] = useState(false)
 
   // Fetch interview data if not provided as prop
   useEffect(() => {
@@ -175,14 +177,14 @@ export default function InformationSection({ showNavigation = true, interview: p
         return
       }
 
-      // Prepare update data
+      // Prepare update data - handle optional fields as empty strings for draft saving
       const updateData = {
-        company_name: data.companyName,
-        position: data.position,
-        job_posting: data.jobPosting,
-        cover_letter: data.coverLetter,
-        resume: data.resume,
-        company_info: data.companyInfo,
+        company_name: data.companyName || "",
+        position: data.position || "",
+        job_posting: data.jobPosting || "",
+        cover_letter: data.coverLetter || "",
+        resume: data.resume || "",
+        company_info: data.companyInfo || "",
         expected_questions: data.expectedQuestions || "",
         company_evaluation: data.companyEvaluation || "",
         other: data.otherNotes || "",
@@ -204,6 +206,28 @@ export default function InformationSection({ showNavigation = true, interview: p
       toast.error("저장 중 오류가 발생했습니다. 다시 시도해주세요.")
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  const handleDocumentUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setIsProcessingDocument(true)
+    try {
+      const extractedText = await extractTextFromDocument(file)
+      form.setValue('resume', extractedText)
+      const fileType = file.type === 'application/pdf' ? 'PDF' : 'Word 문서'
+      toast.success(`${fileType}에서 텍스트를 성공적으로 추출했습니다!`)
+    } catch (error) {
+      console.error('Document processing error:', error)
+      toast.error(error instanceof Error ? error.message : '문서 처리 중 오류가 발생했습니다.')
+    } finally {
+      setIsProcessingDocument(false)
+      // Reset file input
+      if (event.target) {
+        event.target.value = ''
+      }
     }
   }
 
@@ -259,7 +283,23 @@ export default function InformationSection({ showNavigation = true, interview: p
               )} />
             <FormField control={form.control} name="resume" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>이력서 *</FormLabel>
+                  <div className="flex justify-between items-center" style={{height: '14px'}}>
+                    <FormLabel>이력서 *</FormLabel>
+                    <label
+                      className={`text-sm underline cursor-pointer ${
+                        isProcessingDocument ? 'text-gray-400 cursor-not-allowed' : 'text-blue-600 hover:text-blue-800'
+                      }`}
+                    >
+                      <input
+                        type="file"
+                        accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                        onChange={handleDocumentUpload}
+                        className="hidden"
+                        disabled={isProcessingDocument}
+                      />
+                      {isProcessingDocument ? '처리 중...' : '파일 첨부 (PDF/Word)'}
+                    </label>
+                  </div>
                   <FormControl><Textarea placeholder="이력서 내용을 입력하세요" className="min-h-[100px]" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
