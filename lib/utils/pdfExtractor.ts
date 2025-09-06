@@ -161,7 +161,7 @@ export const extractTextFromPDF = async (file: File): Promise<string> => {
         for (let i = 0; i < ocrConfigs.length; i++) {
           const config = ocrConfigs[i]
           try {
-            console.log(`Trying OCR config ${i + 1}: ${config.lang} with ${config.options.tesseract_pageseg_mode || 'AUTO'}`)
+            console.log(`Trying OCR config ${i + 1}: ${config.lang} with ${config.options.tessedit_pageseg_mode || 'AUTO'}`)
             
             const result = await Tesseract.recognize(imageData, config.lang, {
               logger: m => {
