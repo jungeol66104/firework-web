@@ -117,9 +117,9 @@ function PaymentCheckoutContent() {
 
 
   return (
-    <div className="h-screen sm:min-h-screen bg-white flex items-center justify-center p-4">
-      <div className="w-full max-w-sm max-h-[600px] flex flex-col">
-        <div className="flex items-center gap-2 mb-6">
+    <div className="h-screen sm:min-h-screen bg-white flex items-center justify-center p-4 overflow-hidden">
+      <div className="w-full max-w-sm h-full sm:max-h-[600px] flex flex-col justify-center">
+        <div className="flex items-center gap-2 mb-4 sm:mb-6">
           <div className="relative">
             <Hexagon className="w-6 h-6 text-blue-600" />
             <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-blue-600">
@@ -129,11 +129,11 @@ function PaymentCheckoutContent() {
           <h1 className="text-lg font-semibold">토큰 충전</h1>
         </div>
         
-        <p className="text-sm text-gray-600 mb-6">
+        <p className="text-sm text-gray-600 mb-4 sm:mb-6">
           토큰을 구매하여 AI 질문 생성과 답변 생성을 이용하세요.
         </p>
 
-        <div className="space-y-0 mb-6 border border-gray-200 rounded-lg overflow-hidden">
+        <div className="space-y-0 mb-4 sm:mb-6 border border-gray-200 rounded-lg overflow-hidden flex-shrink-0">
           {TOKEN_PACKAGES.map((pkg) => (
             <div 
               key={pkg.id}
@@ -167,7 +167,7 @@ function PaymentCheckoutContent() {
         <Button
           onClick={handlePurchase}
           disabled={loading}
-          className="w-full bg-blue-600 hover:bg-blue-700 mb-4"
+          className="w-full bg-blue-600 hover:bg-blue-700 mb-3 sm:mb-4 flex-shrink-0"
         >
           {loading ? (
             <>
@@ -179,7 +179,7 @@ function PaymentCheckoutContent() {
           )}
         </Button>
 
-        <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
+        <div className="p-3 sm:p-4 bg-blue-50 border border-blue-200 rounded-md flex-shrink-0">
           <div className="text-blue-700 text-sm">
             AI 질문 생성에는 1 토큰이, AI 답변 생성에는 2 토큰이 필요합니다.
           </div>
