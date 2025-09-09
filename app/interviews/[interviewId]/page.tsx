@@ -18,7 +18,6 @@ export default function Page() {
               <InformationSection showNavigation={false} />
               <QuestionsSection showNavigation={false} />
               <AnswersSection showNavigation={false} />
-              <div className="h-[800px]"></div>
             </div>
             <TableOfContents />
           </div>
@@ -36,7 +35,6 @@ export default function Page() {
             <div className="w-full">
               <AnswersSection showNavigation={false} />
             </div>
-            <div className="h-[400px]"></div>
           </div>
         </div>
       </div>

@@ -807,7 +807,7 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
           <AlertDialogHeader>
             <AlertDialogTitle>확인</AlertDialogTitle>
             <AlertDialogDescription>
-              2 토큰이 차감됩니다. {currentAnswerId ? "선택한 답변을 재생성" : "새로운 답변을 생성"}하시겠습니까?
+              6 토큰이 차감됩니다. {currentAnswerId ? "선택한 답변을 재생성" : "새로운 답변을 생성"}하시겠습니까?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -850,7 +850,7 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
           <AlertDialogHeader>
             <AlertDialogTitle>토큰 부족</AlertDialogTitle>
             <AlertDialogDescription>
-              답변 생성에는 2 토큰이 필요합니다. 토큰을 충전하시겠습니까?
+              답변 생성에는 6 토큰이 필요합니다. 토큰을 충전하시겠습니까?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

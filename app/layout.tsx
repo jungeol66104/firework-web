@@ -6,6 +6,7 @@ import { AdminNavBar } from "@/components/admin/adminNavBar";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/ui/theme-provider";
 import { NavBar } from "@/components/navBar";
+import { Footer } from "@/components/ui/footer";
 
 export default function RootLayout({children,}: Readonly<{children: React.ReactNode;}>) {
   const pathname = usePathname();
@@ -14,6 +15,7 @@ export default function RootLayout({children,}: Readonly<{children: React.ReactN
   const isPaymentPage = pathname.startsWith("/payments");
   const isDashboardPage = pathname === "/dashboard";
   const isInterviewPage = pathname.startsWith("/interviews");
+  const isPolicyPage = pathname.startsWith("/terms-of-service") || pathname.startsWith("/privacy-policy");
 
   return (
     <>
@@ -21,9 +23,16 @@ export default function RootLayout({children,}: Readonly<{children: React.ReactN
         <head />
         <body>
           <ThemeProvider attribute="class" defaultTheme="white" enableSystem disableTransitionOnChange>
-            {isAdminPage && <AdminNavBar />}
-            {!isAdminPage && !isAuthPage && !isPaymentPage && !isDashboardPage && !isInterviewPage && <NavBar />}
-            {children}
+            <div className="flex flex-col min-h-screen">
+              {isAdminPage && <AdminNavBar />}
+              {!isAdminPage && !isAuthPage && !isPaymentPage && !isDashboardPage && !isInterviewPage && !isPolicyPage && <NavBar />}
+              
+              <main className="flex-1">
+                {children}
+              </main>
+              
+              <Footer />
+            </div>
             <Toaster position="top-right" />
           </ThemeProvider>
         </body>

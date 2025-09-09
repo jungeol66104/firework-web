@@ -24,7 +24,6 @@ export default async function Page({ params }: { params: Promise<{ interviewId: 
           <InformationSection showNavigation={false} interview={interview} />
           <QuestionsSection showNavigation={false} />
           <AnswersSection showNavigation={false} />
-          <div className="h-[462px]"></div>
         </div>
         <TableOfContents />
       </div>

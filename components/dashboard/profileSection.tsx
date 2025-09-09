@@ -7,13 +7,14 @@ import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AlertCircle, Loader, LogOut, Hexagon } from "lucide-react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { updateCurrentUserProfileClient } from "@/lib/supabase/services/clientServices"
 import { deleteUserAccount, signout } from "@/app/auth/actions"
 import { usePaymentPopup } from "@/hooks/usePaymentPopup"
 import { useStore } from "@/lib/zustand"
+import { useTokens, useRefreshTokens } from "@/lib/zustand"
 
 interface ProfileSectionProps {
   userName: string
@@ -21,7 +22,7 @@ interface ProfileSectionProps {
   tokens: number
 }
 
-export default function ProfileSection({ userName, userEmail, tokens }: ProfileSectionProps) {
+export default function ProfileSection({ userName, userEmail, tokens: initialTokens }: ProfileSectionProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [name, setName] = useState(userName)
   const [email, setEmail] = useState(userEmail || "")
@@ -32,6 +33,18 @@ export default function ProfileSection({ userName, userEmail, tokens }: ProfileS
   const router = useRouter()
   const { openPaymentPopup } = usePaymentPopup()
   const reset = useStore((state) => state.reset)
+  
+  // Use global token state instead of props
+  const currentTokens = useTokens()
+  const refreshTokens = useRefreshTokens()
+  
+  // Use current tokens from store, fall back to initialTokens if not loaded yet
+  const displayTokens = currentTokens !== null ? currentTokens : initialTokens
+
+  // Initialize token store on component mount
+  useEffect(() => {
+    refreshTokens()
+  }, [refreshTokens])
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -167,14 +180,19 @@ export default function ProfileSection({ userName, userEmail, tokens }: ProfileS
                     J
                   </span>
                 </div>
-                <span className="text-sm text-gray-600">{tokens.toLocaleString()}</span>
+                <span className="text-sm text-gray-600">{displayTokens.toLocaleString()}</span>
               </div>
               <Button 
                 size="sm"
                 className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 text-sm"
                 onClick={() => {
                   openPaymentPopup({
-                    onClose: () => router.refresh() // Refresh to show updated token balance
+                    onClose: async () => {
+                      // Refresh tokens from store for real-time update
+                      await refreshTokens()
+                      // Also refresh router for other server-side data
+                      router.refresh()
+                    }
                   })
                 }}
               >

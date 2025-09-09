@@ -23,29 +23,49 @@ interface Package {
 
 const TOKEN_PACKAGES: Package[] = [
   {
-    id: 'starter',
-    tokens: 1,
-    price: 1000,
-    name: 'Starter Pack'
+    id: 'bundle_3',
+    tokens: 3,
+    price: 27000,
+    name: '3토큰 팩'
   },
   {
-    id: 'standard', 
+    id: 'bundle_5', 
     tokens: 5,
-    price: 4000,
-    name: 'Standard Pack',
+    price: 45000,
+    name: '5토큰 팩'
+  },
+  {
+    id: 'bundle_10',
+    tokens: 10, 
+    price: 80000,
+    name: '10토큰 팩',
+    discount: 11
+  },
+  {
+    id: 'bundle_20',
+    tokens: 20, 
+    price: 150000,
+    name: '20토큰 팩',
+    discount: 17
+  },
+  {
+    id: 'bundle_50',
+    tokens: 50, 
+    price: 360000,
+    name: '50토큰 팩',
     discount: 20
   },
   {
-    id: 'premium',
-    tokens: 10, 
-    price: 7000,
-    name: 'Premium Pack',
-    discount: 30
+    id: 'bundle_100',
+    tokens: 100, 
+    price: 702000,
+    name: '100토큰 팩',
+    discount: 22
   }
 ]
 
 export default function TokenPurchaseModal({ open, onOpenChange, onSuccess }: TokenPurchaseModalProps) {
-  const [selectedPackage, setSelectedPackage] = useState<string>('standard')
+  const [selectedPackage, setSelectedPackage] = useState<string>('bundle_5')
   const { openPaymentPopup } = usePaymentPopup()
 
   const handlePurchase = () => {
@@ -130,7 +150,7 @@ export default function TokenPurchaseModal({ open, onOpenChange, onSuccess }: To
 
         <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
           <div className="text-blue-700 text-sm">
-            AI 질문 생성에는 1 토큰이, AI 답변 생성에는 2 토큰이 필요합니다.
+            질문지 생성(30문항)에는 3 토큰이, 답변지 생성(30문항)에는 6 토큰이 필요합니다.
           </div>
         </div>
       </DialogContent>

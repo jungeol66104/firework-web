@@ -34,9 +34,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check if user has sufficient tokens
+    // Check if user has sufficient tokens (3 tokens for question generation)
     const tokens = await getUserTokens(supabase, user.id)
-    if (tokens < 1) {
+    if (tokens < 3) {
       return NextResponse.json(
         { error: 'Insufficient tokens', tokens: tokens },
         { status: 402 }

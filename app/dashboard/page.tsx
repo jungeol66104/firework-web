@@ -29,7 +29,6 @@ export default async function Dashboard() {
             <div className="w-full flex flex-col justify-center items-center gap-4">
               <InterviewsSection />
               <ProfileSection userName={userName} userEmail={userEmail} tokens={tokens} />
-              <div className="h-[800px]"></div>
             </div>
             <DashboardTableOfContents />
           </div>
@@ -44,7 +43,6 @@ export default async function Dashboard() {
             <div className="w-full">
               <ProfileSection userName={userName} userEmail={userEmail} tokens={tokens} />
             </div>
-            <div className="h-[400px]"></div>
           </div>
         </div>
       </div>

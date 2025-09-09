@@ -3,20 +3,35 @@ import { createClient } from '@/lib/supabase/clients/server'
 
 // Token packages configuration
 const TOKEN_PACKAGES = {
-  starter: { 
-    tokens: 1, 
-    price: 1000,
-    name: 'Starter Pack'
+  bundle_3: { 
+    tokens: 3, 
+    price: 27000,
+    name: '3토큰 팩'
   },
-  standard: { 
+  bundle_5: { 
     tokens: 5, 
-    price: 4000,
-    name: 'Standard Pack'
+    price: 45000,
+    name: '5토큰 팩'
   },
-  premium: { 
+  bundle_10: { 
     tokens: 10, 
-    price: 7000,
-    name: 'Premium Pack'
+    price: 80000,
+    name: '10토큰 팩'
+  },
+  bundle_20: { 
+    tokens: 20, 
+    price: 150000,
+    name: '20토큰 팩'
+  },
+  bundle_50: { 
+    tokens: 50, 
+    price: 360000,
+    name: '50토큰 팩'
+  },
+  bundle_100: { 
+    tokens: 100, 
+    price: 702000,
+    name: '100토큰 팩'
   }
 } as const
 

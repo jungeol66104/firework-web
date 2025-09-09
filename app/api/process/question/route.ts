@@ -107,10 +107,10 @@ async function handler(request: NextRequest) {
         return NextResponse.json({ error: 'Database save failed' }, { status: 500 })
       }
 
-      // Deduct token
-      const tokenSpent = await spendTokens(supabase, userId, 1)
+      // Deduct tokens (3 tokens for question generation)
+      const tokenSpent = await spendTokens(supabase, userId, 3)
       if (!tokenSpent) {
-        console.error('Failed to deduct token for job', jobId)
+        console.error('Failed to deduct tokens for job', jobId)
         // Don't fail the job for token deduction failure, but log it
       }
 
