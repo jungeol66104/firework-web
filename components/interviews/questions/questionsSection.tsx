@@ -698,7 +698,7 @@ export default function QuestionsSection({ showNavigation = true }: QuestionsSec
               </span>
             </div>
                     <span className="text-sm text-gray-600">
-                      1 사용
+                      3 사용
                     </span>
                   </div>
                   <Button

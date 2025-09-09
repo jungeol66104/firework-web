@@ -775,7 +775,7 @@ export default function AnswersSection({ showNavigation = true }: AnswersSection
                 </span>
               </div>
                     <span className="text-sm text-gray-600">
-                      2 사용
+                      6 사용
                     </span>
                   </div>
                   <Button
