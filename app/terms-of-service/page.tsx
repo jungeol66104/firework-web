@@ -75,6 +75,7 @@ export default function TermsOfServicePage() {
                       </p>
                       <ul className="text-sm space-y-1">
                         <li>• 번들 할인을 받았더라도 사용분은 항상 정가(9,000원/토큰)로 차감</li>
+                        <li>• 소수점 토큰 사용 시에도 동일한 공식 적용 (예: 2.3토큰 사용 시 20,700원 차감)</li>
                         <li>• 계산 결과가 0 미만이면 환불액 0원 (추가 청구 없음)</li>
                       </ul>
                     </div>
