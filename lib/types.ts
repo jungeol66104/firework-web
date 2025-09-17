@@ -1,6 +1,5 @@
 export interface Interview {
   id: string
-  candidate_name: string
   company_name: string
   position: string
   job_posting: string
@@ -51,6 +50,8 @@ export interface InterviewAnswer {
 export interface Profile {
   id: string
   name: string
+  email?: string
+  is_admin?: boolean
   created_at: string
 }
 

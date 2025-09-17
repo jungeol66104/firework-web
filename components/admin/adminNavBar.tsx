@@ -28,7 +28,7 @@ export const AdminNavBar: React.FC = () => {
       <Link href="/admin" className="text-lg font-bold">정코치 면접 관리 시스템</Link>
       {interviewId && (
         <div className="text-right text-zinc-700">
-          <div className="text-xs">{interview?.candidate_name}</div>
+          <div className="text-xs">{interview?.company_name}</div>
           <div className="text-xs">{interviewId}</div>
         </div>
       )}

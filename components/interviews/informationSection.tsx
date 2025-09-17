@@ -38,7 +38,6 @@ interface InformationSectionProps {
 // Default interview data
 const defaultInterview: Interview = {
   id: "",
-  candidate_name: "",
   company_name: "",
   position: "",
   job_posting: "",

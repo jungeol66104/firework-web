@@ -1,13 +1,7 @@
 
-import { AdminInterviewDataTable } from "@/components/admin/adminInterviewDataTable"
+import { redirect } from 'next/navigation'
 
-export default async function Page() {
-  return (
-    <div className="flex justify-center">
-      <div className="w-full max-w-4xl p-8">
-        <h1 className="text-2xl font-bold mb-4">면접 내역</h1>
-        <AdminInterviewDataTable />
-      </div>
-    </div>
-  )
+export default async function AdminPage() {
+  // Redirect to users page as the main admin entry point
+  redirect('/admin/users')
 }

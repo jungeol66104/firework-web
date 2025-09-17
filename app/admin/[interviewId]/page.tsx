@@ -30,8 +30,8 @@ export default async function AdminInterviewPage({ params }: PageProps) {
           <h2 className="text-xl font-semibold mb-4">면접 정보</h2>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="font-medium text-gray-700">지원자명:</label>
-              <p className="text-gray-900">{interview.candidate_name}</p>
+              <label className="font-medium text-gray-700">사용자 ID:</label>
+              <p className="text-gray-900 font-mono text-sm">{interview.user_id}</p>
             </div>
             <div>
               <label className="font-medium text-gray-700">회사명:</label>

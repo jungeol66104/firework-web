@@ -2,7 +2,6 @@
 
 import "./globals.css";
 import { usePathname } from "next/navigation";
-import { AdminNavBar } from "@/components/admin/adminNavBar";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/ui/theme-provider";
 import { NavBar } from "@/components/navBar";
@@ -24,14 +23,13 @@ export default function RootLayout({children,}: Readonly<{children: React.ReactN
         <body>
           <ThemeProvider attribute="class" defaultTheme="white" enableSystem disableTransitionOnChange>
             <div className="flex flex-col min-h-screen">
-              {isAdminPage && <AdminNavBar />}
               {!isAdminPage && !isAuthPage && !isPaymentPage && !isDashboardPage && !isInterviewPage && !isPolicyPage && <NavBar />}
               
               <main className="flex-1">
                 {children}
               </main>
               
-              <Footer />
+              {!isAdminPage && <Footer />}
             </div>
             <Toaster position="top-right" />
           </ThemeProvider>
