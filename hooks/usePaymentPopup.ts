@@ -12,7 +12,7 @@ export const usePaymentPopup = () => {
     packageId,
     onClose,
     width = 700,
-    height = 700
+    height = 900
   }: PaymentPopupOptions = {}) => {
     // Calculate center position
     const left = (window.screen.width - width) / 2
