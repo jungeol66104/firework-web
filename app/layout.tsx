@@ -29,7 +29,7 @@ export default function RootLayout({children,}: Readonly<{children: React.ReactN
                 {children}
               </main>
               
-              {!isAdminPage && <Footer />}
+              {!isAdminPage && !isAuthPage && !isPaymentPage && <Footer />}
             </div>
             <Toaster position="top-right" />
           </ThemeProvider>

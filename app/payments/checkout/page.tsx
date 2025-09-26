@@ -25,38 +25,17 @@ const TOKEN_PACKAGES: Package[] = [
     name: '3토큰 팩'
   },
   {
-    id: 'bundle_5', 
+    id: 'bundle_5',
     tokens: 5,
     price: 45000,
     name: '5토큰 팩'
   },
   {
     id: 'bundle_10',
-    tokens: 10, 
+    tokens: 10,
     price: 80000,
     name: '10토큰 팩',
     discount: 11
-  },
-  {
-    id: 'bundle_20',
-    tokens: 20, 
-    price: 150000,
-    name: '20토큰 팩',
-    discount: 17
-  },
-  {
-    id: 'bundle_50',
-    tokens: 50, 
-    price: 360000,
-    name: '50토큰 팩',
-    discount: 20
-  },
-  {
-    id: 'bundle_100',
-    tokens: 100, 
-    price: 702000,
-    name: '100토큰 팩',
-    discount: 22
   }
 ]
 
