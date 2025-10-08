@@ -164,7 +164,27 @@ export async function POST(
 
     // Map type to processing endpoint (replace underscore with hyphen)
     const processingEndpoint = type.replace(/_/g, '-')
-    const callbackUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/api/process/${processingEndpoint}`
+
+    // Validate and construct callback URL
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL
+    if (!baseUrl) {
+      console.error('NEXT_PUBLIC_BASE_URL is not configured')
+      await supabase
+        .from('interview_qa_jobs')
+        .update({ status: 'failed', error_message: 'Server configuration error' })
+        .eq('id', job.id)
+      return NextResponse.json(
+        { error: 'Server configuration error' },
+        { status: 500 }
+      )
+    }
+
+    // Ensure URL has protocol
+    const normalizedBaseUrl = baseUrl.startsWith('http://') || baseUrl.startsWith('https://')
+      ? baseUrl
+      : `https://${baseUrl}`
+
+    const callbackUrl = `${normalizedBaseUrl}/api/process/${processingEndpoint}`
 
     try {
       await qstashClient.publishJSON({
