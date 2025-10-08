@@ -180,7 +180,7 @@ export default function ProfileSection({ userName, userEmail, tokens: initialTok
                     J
                   </span>
                 </div>
-                <span className="text-sm text-gray-600">{displayTokens.toLocaleString()}</span>
+                <span className="text-sm text-gray-600">{displayTokens.toLocaleString('ko-KR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
               </div>
               <Button 
                 size="sm"

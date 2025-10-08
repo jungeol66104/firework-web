@@ -1,13 +1,38 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
-import { Loader, History, Plus } from "lucide-react"
+import { useState, useEffect, useRef, Suspense } from "react"
+import { Loader, History, Plus, ChevronDown, MoreHorizontal, MoreVertical, FileText, Trash2 } from "lucide-react"
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable"
 import { Button } from "@/components/ui/button"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { Input } from "@/components/ui/input"
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { z } from "zod"
+import { getCurrentUserClient, updateInterviewClient } from "@/lib/supabase/services/clientServices"
+import { extractTextFromDocument } from "@/lib/utils/documentExtractor"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useInterviews, useStore, useRefreshTokens } from "@/lib/zustand"
+import { Interview } from "@/lib/types"
+import { createClient } from "@/lib/supabase/clients/client"
+import { getCurrentUserInterviewsClient } from "@/lib/supabase/services/clientServices"
+import { useSearchParams, useRouter } from "next/navigation"
+import { useJobPolling } from "@/hooks/useJobPolling"
+import { toast } from "sonner"
+
+// Helper function to check if a question was selected for answer generation
+const isQuestionSelectedForAnswerGen = (job: any, category: string, index: number): boolean => {
+  if (!job?.input_data?.selectedQuestions) return false
+  return job.input_data.selectedQuestions.some((q: any) =>
+    q.category === category && q.index === index
+  )
+}
 
 // Helper function to format question_data into HTML with optional answers merged
 const formatQuestionDataAsHTML = (
@@ -19,7 +44,11 @@ const formatQuestionDataAsHTML = (
   editText?: string,
   onEditTextChange?: (text: string) => void,
   onEditSave?: () => void,
-  onEditCancel?: () => void
+  onEditCancel?: () => void,
+  onEditQA?: (type: 'question' | 'answer', category: string, index: number, text: string) => void,
+  onRegenerateQA?: (type: 'question' | 'answer', category: string, index: number, text: string) => void,
+  job?: any,
+  isPolling?: boolean
 ): React.ReactNode => {
   if (!questionData || typeof questionData !== 'object') {
     return <div className="text-gray-500">유효하지 않은 질문 데이터입니다</div>
@@ -50,45 +79,168 @@ const formatQuestionDataAsHTML = (
         <h3 className="font-bold text-sm mb-0 px-4 py-3 bg-gray-50 border-b border-gray-200 sticky top-0 z-10">일반 인성면접 질문 (10개)</h3>
         <div>
           {general_personality.map((q, i) => {
-            const itemId = `general_personality_${i}`
-            const isSelected = selectedItems?.has(itemId) || false
+            const questionId = `general_personality_q_${i}`
+            const answerId = `general_personality_a_${i}`
+            const isQuestionSelected = selectedItems?.has(questionId) || false
+            const isAnswerSelected = selectedItems?.has(answerId) || false
+
             return (
-              <div
-                key={i}
-                className={`relative text-sm cursor-pointer border-b border-gray-100 transition-colors ${
-                  isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
-                }`}
-                onClick={() => handleItemClick(itemId)}
-              >
-                <div className="px-4 py-3">
-                  <div className="flex mb-2">
-                    <span className="w-6 flex-shrink-0 font-medium">{i + 1}.</span>
-                    <span className="flex-1 font-medium">{q}</span>
+              <div key={i}>
+                {/* Question */}
+                <div
+                  className={`relative text-sm border-b border-gray-200 transition-colors group cursor-pointer ${
+                    isQuestionSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
+                  }`}
+                  onClick={() => handleItemClick(questionId)}
+                >
+                  <div className="px-2 py-3">
+                    <div className="flex items-start gap-2">
+                      <span className="w-6 flex-shrink-0 font-medium leading-6">{i + 1}.</span>
+                      {(isPolling &&
+                       ((job?.type === 'question_edited' && job?.input_data?.category === 'general_personality' && job?.input_data?.index === i) ||
+                        (job?.type === 'question_regenerated' && job?.input_data?.category === 'general_personality' && job?.input_data?.index === i))) ? (
+                        <div className="flex-1 flex items-center gap-2">
+                          <Loader className="h-4 w-4 animate-spin text-gray-400" />
+                          <span className="text-gray-400 leading-6">{job?.type === 'question_edited' ? '수정 중...' : '재생성 중...'}</span>
+                        </div>
+                      ) : (
+                        <span className="flex-1 font-medium leading-6">{q}</span>
+                      )}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0 flex-shrink-0 text-gray-300 group-hover:text-black hover:bg-transparent"
+                          >
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            className="cursor-pointer"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              onEditQA?.('question', 'general_personality', i, q)
+                            }}
+                          >
+                            수정
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="cursor-pointer"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              onRegenerateQA?.('question', 'general_personality', i, q)
+                            }}
+                          >
+                            재생성
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </div>
-                  {answers && answers.general_personality[i] && (
-                    <div className="ml-6 mt-2 text-gray-700 whitespace-pre-wrap">
-                      {answers.general_personality[i]}
+                  {showEditDropdown === questionId && (
+                    <div className="absolute left-10 right-0 z-50 bg-white border border-gray-200 rounded-md shadow-lg" data-edit-dropdown>
+                      <div className="p-2">
+                        <Textarea
+                          value={editText || ""}
+                          onChange={(e) => onEditTextChange?.(e.target.value)}
+                          placeholder="수정할 내용을 입력하세요..."
+                          className="mb-3 border-0 focus:ring-0 shadow-none focus:outline-none focus:border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+                          rows={3}
+                        />
+                        <div className="flex gap-2 justify-end">
+                          <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={onEditSave}>
+                            수정
+                          </Button>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
-                {showEditDropdown === itemId && (
-                  <div className="absolute left-10 right-0 z-50 bg-white border border-gray-200 rounded-md shadow-lg" data-edit-dropdown>
-                    <div className="p-2">
-                      <Textarea
-                        value={editText || ""}
-                        onChange={(e) => onEditTextChange?.(e.target.value)}
-                        placeholder="수정할 내용을 입력하세요..."
-                        className="mb-3 border-0 focus:ring-0 shadow-none focus:outline-none focus:border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
-                        rows={3}
-                      />
-                      <div className="flex gap-2 justify-end">
-                        <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={onEditSave}>
-                          수정
-                        </Button>
+
+                {/* Answer */}
+                {((answers && answers.general_personality[i]) || (isPolling && job?.type === 'answers_generated' && isQuestionSelectedForAnswerGen(job, 'general_personality', i))) ? (
+                  <div
+                    className={`relative text-sm border-b border-gray-200 transition-colors group cursor-pointer ${
+                      isAnswerSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
+                    }`}
+                    onClick={() => handleItemClick(answerId)}
+                  >
+                    <div className="px-2 py-3">
+                      <div className="flex gap-2">
+                        {(isPolling &&
+                         ((job?.type === 'answer_edited' && job?.input_data?.category === 'general_personality' && job?.input_data?.index === i) ||
+                          (job?.type === 'answer_regenerated' && job?.input_data?.category === 'general_personality' && job?.input_data?.index === i))) ? (
+                          <div className="flex-1 ml-8 flex items-center gap-2">
+                            <Loader className="h-4 w-4 animate-spin text-gray-400" />
+                            <span className="text-gray-400 leading-6">{job?.type === 'answer_edited' ? '수정 중...' : '재생성 중...'}</span>
+                          </div>
+                        ) : (isPolling && job?.type === 'answers_generated' && isQuestionSelectedForAnswerGen(job, 'general_personality', i) && !answers?.general_personality[i]) ? (
+                          <div className="flex-1 ml-8 flex items-center gap-2">
+                            <Loader className="h-4 w-4 animate-spin text-gray-400" />
+                            <span className="text-gray-400 leading-6">답변 생성 중...</span>
+                          </div>
+                        ) : answers?.general_personality[i] ? (
+                          <div className="flex-1 ml-8 text-gray-700 whitespace-pre-wrap leading-6">
+                            {answers.general_personality[i]}
+                          </div>
+                        ) : null}
+                        {answers?.general_personality[i] && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 w-6 p-0 flex-shrink-0 self-start text-gray-300 group-hover:text-black hover:bg-transparent"
+                              >
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                className="cursor-pointer"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  onEditQA?.('answer', 'general_personality', i, answers.general_personality[i])
+                                }}
+                              >
+                                수정
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="cursor-pointer"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  onRegenerateQA?.('answer', 'general_personality', i, answers.general_personality[i])
+                                }}
+                              >
+                                재생성
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
                       </div>
                     </div>
+                    {showEditDropdown === answerId && (
+                      <div className="absolute left-10 right-0 z-50 bg-white border border-gray-200 rounded-md shadow-lg" data-edit-dropdown>
+                        <div className="p-2">
+                          <Textarea
+                            value={editText || ""}
+                            onChange={(e) => onEditTextChange?.(e.target.value)}
+                            placeholder="수정할 내용을 입력하세요..."
+                            className="mb-3 border-0 focus:ring-0 shadow-none focus:outline-none focus:border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+                            rows={3}
+                          />
+                          <div className="flex gap-2 justify-end">
+                            <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={onEditSave}>
+                              수정
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                )}
+                ) : null}
               </div>
             )
           })}
@@ -99,45 +251,168 @@ const formatQuestionDataAsHTML = (
         <h3 className="font-bold text-sm mb-0 px-4 py-3 bg-gray-50 border-b border-gray-200 sticky top-0 z-10">자기소개서 기반 인성면접 질문 (10개)</h3>
         <div>
           {cover_letter_personality.map((q, i) => {
-            const itemId = `cover_letter_personality_${i}`
-            const isSelected = selectedItems?.has(itemId) || false
+            const questionId = `cover_letter_personality_q_${i}`
+            const answerId = `cover_letter_personality_a_${i}`
+            const isQuestionSelected = selectedItems?.has(questionId) || false
+            const isAnswerSelected = selectedItems?.has(answerId) || false
+
             return (
-              <div
-                key={i}
-                className={`relative text-sm cursor-pointer border-b border-gray-100 transition-colors ${
-                  isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
-                }`}
-                onClick={() => handleItemClick(itemId)}
-              >
-                <div className="px-4 py-3">
-                  <div className="flex mb-2">
-                    <span className="w-6 flex-shrink-0 font-medium">{i + 1}.</span>
-                    <span className="flex-1 font-medium">{q}</span>
+              <div key={i}>
+                {/* Question */}
+                <div
+                  className={`relative text-sm border-b border-gray-200 transition-colors group cursor-pointer ${
+                    isQuestionSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
+                  }`}
+                  onClick={() => handleItemClick(questionId)}
+                >
+                  <div className="px-2 py-3">
+                    <div className="flex items-start gap-2">
+                      <span className="w-6 flex-shrink-0 font-medium leading-6">{i + 1}.</span>
+                      {(isPolling &&
+                       ((job?.type === 'question_edited' && job?.input_data?.category === 'cover_letter_personality' && job?.input_data?.index === i) ||
+                        (job?.type === 'question_regenerated' && job?.input_data?.category === 'cover_letter_personality' && job?.input_data?.index === i))) ? (
+                        <div className="flex-1 flex items-center gap-2">
+                          <Loader className="h-4 w-4 animate-spin text-gray-400" />
+                          <span className="text-gray-400 leading-6">{job?.type === 'question_edited' ? '수정 중...' : '재생성 중...'}</span>
+                        </div>
+                      ) : (
+                        <span className="flex-1 font-medium leading-6">{q}</span>
+                      )}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0 flex-shrink-0 text-gray-300 group-hover:text-black hover:bg-transparent"
+                          >
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            className="cursor-pointer"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              onEditQA?.('question', 'cover_letter_personality', i, q)
+                            }}
+                          >
+                            수정
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="cursor-pointer"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              onRegenerateQA?.('question', 'cover_letter_personality', i, q)
+                            }}
+                          >
+                            재생성
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </div>
-                  {answers && answers.cover_letter_personality[i] && (
-                    <div className="ml-6 mt-2 text-gray-700 whitespace-pre-wrap">
-                      {answers.cover_letter_personality[i]}
+                  {showEditDropdown === questionId && (
+                    <div className="absolute left-10 right-0 z-50 bg-white border border-gray-200 rounded-md shadow-lg" data-edit-dropdown>
+                      <div className="p-2">
+                        <Textarea
+                          value={editText || ""}
+                          onChange={(e) => onEditTextChange?.(e.target.value)}
+                          placeholder="수정할 내용을 입력하세요..."
+                          className="mb-3 border-0 focus:ring-0 shadow-none focus:outline-none focus:border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+                          rows={3}
+                        />
+                        <div className="flex gap-2 justify-end">
+                          <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={onEditSave}>
+                            수정
+                          </Button>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
-                {showEditDropdown === itemId && (
-                  <div className="absolute left-10 right-0 z-50 bg-white border border-gray-200 rounded-md shadow-lg" data-edit-dropdown>
-                    <div className="p-2">
-                      <Textarea
-                        value={editText || ""}
-                        onChange={(e) => onEditTextChange?.(e.target.value)}
-                        placeholder="수정할 내용을 입력하세요..."
-                        className="mb-3 border-0 focus:ring-0 shadow-none focus:outline-none focus:border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
-                        rows={3}
-                      />
-                      <div className="flex gap-2 justify-end">
-                        <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={onEditSave}>
-                          수정
-                        </Button>
+
+                {/* Answer */}
+                {((answers && answers.cover_letter_personality[i]) || (isPolling && job?.type === 'answers_generated' && isQuestionSelectedForAnswerGen(job, 'cover_letter_personality', i))) ? (
+                  <div
+                    className={`relative text-sm border-b border-gray-200 transition-colors group cursor-pointer ${
+                      isAnswerSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
+                    }`}
+                    onClick={() => handleItemClick(answerId)}
+                  >
+                    <div className="px-2 py-3">
+                      <div className="flex gap-2">
+                        {(isPolling &&
+                         ((job?.type === 'answer_edited' && job?.input_data?.category === 'cover_letter_personality' && job?.input_data?.index === i) ||
+                          (job?.type === 'answer_regenerated' && job?.input_data?.category === 'cover_letter_personality' && job?.input_data?.index === i))) ? (
+                          <div className="flex-1 ml-8 flex items-center gap-2">
+                            <Loader className="h-4 w-4 animate-spin text-gray-400" />
+                            <span className="text-gray-400 leading-6">{job?.type === 'answer_edited' ? '수정 중...' : '재생성 중...'}</span>
+                          </div>
+                        ) : (isPolling && job?.type === 'answers_generated' && isQuestionSelectedForAnswerGen(job, 'cover_letter_personality', i) && !answers?.cover_letter_personality[i]) ? (
+                          <div className="flex-1 ml-8 flex items-center gap-2">
+                            <Loader className="h-4 w-4 animate-spin text-gray-400" />
+                            <span className="text-gray-400 leading-6">답변 생성 중...</span>
+                          </div>
+                        ) : answers?.cover_letter_personality[i] ? (
+                          <div className="flex-1 ml-8 text-gray-700 whitespace-pre-wrap leading-6">
+                            {answers.cover_letter_personality[i]}
+                          </div>
+                        ) : null}
+                        {answers?.cover_letter_personality[i] && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 w-6 p-0 flex-shrink-0 self-start text-gray-300 group-hover:text-black hover:bg-transparent"
+                              >
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                className="cursor-pointer"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  onEditQA?.('answer', 'cover_letter_personality', i, answers.cover_letter_personality[i])
+                                }}
+                              >
+                                수정
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="cursor-pointer"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  onRegenerateQA?.('answer', 'cover_letter_personality', i, answers.cover_letter_personality[i])
+                                }}
+                              >
+                                재생성
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
                       </div>
                     </div>
+                    {showEditDropdown === answerId && (
+                      <div className="absolute left-10 right-0 z-50 bg-white border border-gray-200 rounded-md shadow-lg" data-edit-dropdown>
+                        <div className="p-2">
+                          <Textarea
+                            value={editText || ""}
+                            onChange={(e) => onEditTextChange?.(e.target.value)}
+                            placeholder="수정할 내용을 입력하세요..."
+                            className="mb-3 border-0 focus:ring-0 shadow-none focus:outline-none focus:border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+                            rows={3}
+                          />
+                          <div className="flex gap-2 justify-end">
+                            <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={onEditSave}>
+                              수정
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                )}
+                ) : null}
               </div>
             )
           })}
@@ -148,45 +423,168 @@ const formatQuestionDataAsHTML = (
         <h3 className="font-bold text-sm mb-0 px-4 py-3 bg-gray-50 border-b border-gray-200 sticky top-0 z-10">자기소개서 기반 직무 역량 확인 질문 (10개)</h3>
         <div>
           {cover_letter_competency.map((q, i) => {
-            const itemId = `cover_letter_competency_${i}`
-            const isSelected = selectedItems?.has(itemId) || false
+            const questionId = `cover_letter_competency_q_${i}`
+            const answerId = `cover_letter_competency_a_${i}`
+            const isQuestionSelected = selectedItems?.has(questionId) || false
+            const isAnswerSelected = selectedItems?.has(answerId) || false
+
             return (
-              <div
-                key={i}
-                className={`text-sm cursor-pointer transition-colors ${
-                  i < cover_letter_competency.length - 1 ? 'border-b border-gray-100' : ''
-                } ${isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
-                onClick={() => handleItemClick(itemId)}
-              >
-                <div className="px-4 py-3">
-                  <div className="flex mb-2">
-                    <span className="w-6 flex-shrink-0 font-medium">{i + 1}.</span>
-                    <span className="flex-1 font-medium">{q}</span>
+              <div key={i}>
+                {/* Question */}
+                <div
+                  className={`relative text-sm border-b border-gray-200 transition-colors group cursor-pointer ${
+                    isQuestionSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
+                  }`}
+                  onClick={() => handleItemClick(questionId)}
+                >
+                  <div className="px-2 py-3">
+                    <div className="flex items-start gap-2">
+                      <span className="w-6 flex-shrink-0 font-medium leading-6">{i + 1}.</span>
+                      {(isPolling &&
+                       ((job?.type === 'question_edited' && job?.input_data?.category === 'cover_letter_competency' && job?.input_data?.index === i) ||
+                        (job?.type === 'question_regenerated' && job?.input_data?.category === 'cover_letter_competency' && job?.input_data?.index === i))) ? (
+                        <div className="flex-1 flex items-center gap-2">
+                          <Loader className="h-4 w-4 animate-spin text-gray-400" />
+                          <span className="text-gray-400 leading-6">{job?.type === 'question_edited' ? '수정 중...' : '재생성 중...'}</span>
+                        </div>
+                      ) : (
+                        <span className="flex-1 font-medium leading-6">{q}</span>
+                      )}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0 flex-shrink-0 text-gray-300 group-hover:text-black hover:bg-transparent"
+                          >
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            className="cursor-pointer"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              onEditQA?.('question', 'cover_letter_competency', i, q)
+                            }}
+                          >
+                            수정
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="cursor-pointer"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              onRegenerateQA?.('question', 'cover_letter_competency', i, q)
+                            }}
+                          >
+                            재생성
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </div>
-                  {answers && answers.cover_letter_competency[i] && (
-                    <div className="ml-6 mt-2 text-gray-700 whitespace-pre-wrap">
-                      {answers.cover_letter_competency[i]}
+                  {showEditDropdown === questionId && (
+                    <div className="absolute left-10 right-0 z-50 bg-white border border-gray-200 rounded-md shadow-lg" data-edit-dropdown>
+                      <div className="p-2">
+                        <Textarea
+                          value={editText || ""}
+                          onChange={(e) => onEditTextChange?.(e.target.value)}
+                          placeholder="수정할 내용을 입력하세요..."
+                          className="mb-3 border-0 focus:ring-0 shadow-none focus:outline-none focus:border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+                          rows={3}
+                        />
+                        <div className="flex gap-2 justify-end">
+                          <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={onEditSave}>
+                            수정
+                          </Button>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
-                {showEditDropdown === itemId && (
-                  <div className="absolute left-10 right-0 z-50 bg-white border border-gray-200 rounded-md shadow-lg" data-edit-dropdown>
-                    <div className="p-2">
-                      <Textarea
-                        value={editText || ""}
-                        onChange={(e) => onEditTextChange?.(e.target.value)}
-                        placeholder="수정할 내용을 입력하세요..."
-                        className="mb-3 border-0 focus:ring-0 shadow-none focus:outline-none focus:border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
-                        rows={3}
-                      />
-                      <div className="flex gap-2 justify-end">
-                        <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={onEditSave}>
-                          수정
-                        </Button>
+
+                {/* Answer */}
+                {((answers && answers.cover_letter_competency[i]) || (isPolling && job?.type === 'answers_generated' && isQuestionSelectedForAnswerGen(job, 'cover_letter_competency', i))) ? (
+                  <div
+                    className={`relative text-sm border-b border-gray-200 transition-colors group cursor-pointer ${
+                      isAnswerSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
+                    }`}
+                    onClick={() => handleItemClick(answerId)}
+                  >
+                    <div className="px-2 py-3">
+                      <div className="flex gap-2">
+                        {(isPolling &&
+                         ((job?.type === 'answer_edited' && job?.input_data?.category === 'cover_letter_competency' && job?.input_data?.index === i) ||
+                          (job?.type === 'answer_regenerated' && job?.input_data?.category === 'cover_letter_competency' && job?.input_data?.index === i))) ? (
+                          <div className="flex-1 ml-8 flex items-center gap-2">
+                            <Loader className="h-4 w-4 animate-spin text-gray-400" />
+                            <span className="text-gray-400 leading-6">{job?.type === 'answer_edited' ? '수정 중...' : '재생성 중...'}</span>
+                          </div>
+                        ) : (isPolling && job?.type === 'answers_generated' && isQuestionSelectedForAnswerGen(job, 'cover_letter_competency', i) && !answers?.cover_letter_competency[i]) ? (
+                          <div className="flex-1 ml-8 flex items-center gap-2">
+                            <Loader className="h-4 w-4 animate-spin text-gray-400" />
+                            <span className="text-gray-400 leading-6">답변 생성 중...</span>
+                          </div>
+                        ) : answers?.cover_letter_competency[i] ? (
+                          <div className="flex-1 ml-8 text-gray-700 whitespace-pre-wrap leading-6">
+                            {answers.cover_letter_competency[i]}
+                          </div>
+                        ) : null}
+                        {answers?.cover_letter_competency[i] && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 w-6 p-0 flex-shrink-0 self-start text-gray-300 group-hover:text-black hover:bg-transparent"
+                              >
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                className="cursor-pointer"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  onEditQA?.('answer', 'cover_letter_competency', i, answers.cover_letter_competency[i])
+                                }}
+                              >
+                                수정
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="cursor-pointer"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  onRegenerateQA?.('answer', 'cover_letter_competency', i, answers.cover_letter_competency[i])
+                                }}
+                              >
+                                재생성
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
                       </div>
                     </div>
+                    {showEditDropdown === answerId && (
+                      <div className="absolute left-10 right-0 z-50 bg-white border border-gray-200 rounded-md shadow-lg" data-edit-dropdown>
+                        <div className="p-2">
+                          <Textarea
+                            value={editText || ""}
+                            onChange={(e) => onEditTextChange?.(e.target.value)}
+                            placeholder="수정할 내용을 입력하세요..."
+                            className="mb-3 border-0 focus:ring-0 shadow-none focus:outline-none focus:border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+                            rows={3}
+                          />
+                          <div className="flex gap-2 justify-end">
+                            <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={onEditSave}>
+                              수정
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                )}
+                ) : null}
               </div>
             )
           })}
@@ -196,24 +594,123 @@ const formatQuestionDataAsHTML = (
   )
 }
 
-export default function Page() {
+const formSchema = z.object({
+  companyName: z.string().optional(),
+  position: z.string().optional(),
+  jobPosting: z.string().optional(),
+  coverLetter: z.string().optional(),
+  resume: z.string().optional(),
+  companyInfo: z.string().optional(),
+  expectedQuestions: z.string().optional(),
+  companyEvaluation: z.string().optional(),
+  otherNotes: z.string().optional(),
+})
+
+type InfoFormData = z.infer<typeof formSchema>
+
+function InterviewPage() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+
+  // Get interviews from Zustand store
+  const interviews = useInterviews()
+  const isLoadingInterviews = useStore((state) => state.isLoading)
+  const setInterviews = useStore((state) => state.setInterviews)
+  const setLoadingInterviews = useStore((state) => state.setLoading)
+  const setCurrentUserId = useStore((state) => state.setCurrentUserId)
+  const currentUserId = useStore((state) => state.currentUserId)
+  const reset = useStore((state) => state.reset)
+
+  // Token management
+  const refreshTokens = useRefreshTokens()
+
   const [questionData, setQuestionData] = useState<any>(null)
   const [answerData, setAnswerData] = useState<any>(null)
-  const [companyName, setCompanyName] = useState<string>("회사명")
-  const [jobPosition, setJobPosition] = useState<string>("직무명")
+  const [selectedInterview, setSelectedInterview] = useState<Interview | null>(null)
   const [selectedVersion, setSelectedVersion] = useState<string>("최신")
+
+  const handleVersionChange = (version: string) => {
+    if (version === 'create-new-version') {
+      // TODO: Implement create new version logic
+      console.log('Creating new version...')
+      return
+    }
+    setSelectedVersion(version)
+  }
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set())
   const [showEditDropdown, setShowEditDropdown] = useState<string | null>(null)
   const [editText, setEditText] = useState<string>("")
   const [showHistoryDialog, setShowHistoryDialog] = useState<boolean>(false)
-  const [interviewId, setInterviewId] = useState<string | null>(null)
   const [showQuestionsDialog, setShowQuestionsDialog] = useState<boolean>(false)
   const [showAnswersDialog, setShowAnswersDialog] = useState<boolean>(false)
   const [generationComment, setGenerationComment] = useState<string>("")
+  const [userId, setUserId] = useState<string | null>(null)
+  const [hasInitialized, setHasInitialized] = useState(false)
+  const [isHydrated, setIsHydrated] = useState(false)
+  const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState(false)
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null)
+  const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null)
+  const [activeView, setActiveView] = useState<'qa' | 'info'>('qa')
+  const [isCompletingJob, setIsCompletingJob] = useState(false) // Tracks if job completed but data not yet fetched
+
+  // Edit/Regenerate dialog states
+  const [showEditQADialog, setShowEditQADialog] = useState(false)
+  const [showRegenerateQADialog, setShowRegenerateQADialog] = useState(false)
+  const [selectedQAItem, setSelectedQAItem] = useState<{
+    type: 'question' | 'answer'
+    category: string
+    index: number
+    text: string
+  } | null>(null)
+  const [qaOperationComment, setQaOperationComment] = useState("")
+
+  const [qaHistory, setQaHistory] = useState<Array<{
+    id: string
+    name: string
+    type: string
+    is_default: boolean
+    created_at: string
+  }>>([])
+  const [viewingQaId, setViewingQaId] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isProcessingDocument, setIsProcessingDocument] = useState(false)
+  const [showCreateInterviewDialog, setShowCreateInterviewDialog] = useState(false)
+  const [newInterviewCompanyName, setNewInterviewCompanyName] = useState("")
+  const [newInterviewPosition, setNewInterviewPosition] = useState("")
+  const [isCreatingInterview, setIsCreatingInterview] = useState(false)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [deleteConfirmText, setDeleteConfirmText] = useState("")
+  const [isDeletingInterview, setIsDeletingInterview] = useState(false)
+
+  // Form for basic info
+  const form = useForm<InfoFormData>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      companyName: "",
+      position: "",
+      jobPosting: "",
+      coverLetter: "",
+      resume: "",
+      companyInfo: "",
+      expectedQuestions: "",
+      companyEvaluation: "",
+      otherNotes: "",
+    },
+  })
+
+  // Poll job status
+  const { job, isPolling: hookIsPolling } = useJobPolling(currentJobId)
+  // Keep showing loaders during completion until data is fetched
+  const isPolling = hookIsPolling || isCompletingJob
 
   const handleItemClick = (itemId: string) => {
+    // Only allow selecting questions (items ending with _q_), not answers
+    if (!itemId.includes('_q_')) {
+      return
+    }
+
     setSelectedItems(prev => {
       const newSet = new Set(prev)
       if (newSet.has(itemId)) {
@@ -224,6 +721,13 @@ export default function Page() {
       return newSet
     })
   }
+
+  // Auto-close history panel when switching to info view
+  useEffect(() => {
+    if (activeView === 'info') {
+      setIsHistoryPanelOpen(false)
+    }
+  }, [activeView])
 
   const handleEditClick = () => {
     const selectedItemId = Array.from(selectedItems)[0]
@@ -243,57 +747,710 @@ export default function Page() {
     setEditText("")
   }
 
+  // Update form when selectedInterview changes
+  useEffect(() => {
+    if (selectedInterview) {
+      form.reset({
+        companyName: selectedInterview.company_name || "",
+        position: selectedInterview.position || "",
+        jobPosting: selectedInterview.job_posting || "",
+        coverLetter: selectedInterview.cover_letter || "",
+        resume: selectedInterview.resume || "",
+        companyInfo: selectedInterview.company_info || "",
+        expectedQuestions: selectedInterview.expected_questions || "",
+        companyEvaluation: selectedInterview.company_evaluation || "",
+        otherNotes: selectedInterview.other || "",
+      })
+
+      // Check if required fields are filled (excluding optional fields)
+      const hasJobPosting = selectedInterview.job_posting && selectedInterview.job_posting.trim() !== ""
+      const hasCoverLetter = selectedInterview.cover_letter && selectedInterview.cover_letter.trim() !== ""
+      const hasResume = selectedInterview.resume && selectedInterview.resume.trim() !== ""
+      const hasCompanyInfo = selectedInterview.company_info && selectedInterview.company_info.trim() !== ""
+
+      // If any required field is missing, show info view
+      if (!hasJobPosting || !hasCoverLetter || !hasResume || !hasCompanyInfo) {
+        setActiveView('info')
+      }
+    }
+  }, [selectedInterview, form])
+
+  const handleInfoFormSubmit = async (data: InfoFormData) => {
+    if (!selectedInterview?.id) {
+      toast.error("면접 ID를 찾을 수 없습니다.")
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      const user = await getCurrentUserClient()
+
+      if (!user?.id) {
+        toast.error("사용자 인증이 필요합니다. 다시 로그인해주세요.")
+        return
+      }
+
+      const updateData = {
+        company_name: data.companyName || "",
+        position: data.position || "",
+        job_posting: data.jobPosting || "",
+        cover_letter: data.coverLetter || "",
+        resume: data.resume || "",
+        company_info: data.companyInfo || "",
+        expected_questions: data.expectedQuestions || "",
+        company_evaluation: data.companyEvaluation || "",
+        other: data.otherNotes || "",
+      }
+
+      const updatedInterview = await updateInterviewClient(selectedInterview.id, updateData, user.id)
+
+      // Update selected interview
+      setSelectedInterview(updatedInterview)
+
+      toast.success("면접 정보가 성공적으로 저장되었습니다!")
+    } catch (error) {
+      console.error("Error updating interview:", error)
+      toast.error("저장 중 오류가 발생했습니다. 다시 시도해주세요.")
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleDocumentUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setIsProcessingDocument(true)
+    try {
+      const extractedText = await extractTextFromDocument(file)
+      form.setValue('resume', extractedText)
+      const fileType = file.type === 'application/pdf' ? 'PDF' : 'Word 문서'
+      toast.success(`${fileType}에서 텍스트를 성공적으로 추출했습니다!`)
+    } catch (error) {
+      console.error('Document processing error:', error)
+      toast.error(error instanceof Error ? error.message : '문서 처리 중 오류가 발생했습니다.')
+    } finally {
+      setIsProcessingDocument(false)
+      if (event.target) {
+        event.target.value = ''
+      }
+    }
+  }
+
+  const handleInterviewChange = (interviewId: string) => {
+    if (interviewId === 'create-new') {
+      // Open create interview dialog
+      setShowCreateInterviewDialog(true)
+      return
+    }
+
+    const interview = interviews.find(i => i.id === interviewId)
+    if (interview) {
+      setSelectedInterview(interview)
+      // Update URL with interview ID
+      const params = new URLSearchParams(searchParams.toString())
+      params.set('id', interviewId)
+      router.push(`/interview?${params.toString()}`)
+    }
+  }
+
+  const handleCreateInterview = async () => {
+    if (!newInterviewCompanyName.trim() || !newInterviewPosition.trim() || !userId) {
+      toast.error("회사명과 직무를 모두 입력해주세요.")
+      return
+    }
+
+    setIsCreatingInterview(true)
+    try {
+      const response = await fetch('/api/interviews', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          company_name: newInterviewCompanyName.trim(),
+          position: newInterviewPosition.trim(),
+          user_id: userId,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to create interview')
+      }
+
+      const newInterview = await response.json()
+
+      toast.success('새 면접이 생성되었습니다.')
+
+      // Reload interviews
+      const { interviews: updatedInterviews } = await getCurrentUserInterviewsClient()
+      setInterviews(updatedInterviews)
+
+      // Select new interview
+      setSelectedInterview(newInterview)
+      router.push(`/interview?id=${newInterview.id}`)
+
+      // Close dialog and reset form
+      setShowCreateInterviewDialog(false)
+      setNewInterviewCompanyName("")
+      setNewInterviewPosition("")
+    } catch (error) {
+      console.error('Error creating interview:', error)
+      toast.error('면접 생성 중 오류가 발생했습니다.')
+    } finally {
+      setIsCreatingInterview(false)
+    }
+  }
+
+  const handleDeleteInterview = async () => {
+    if (!selectedInterview?.id) return
+
+    // Check if user typed the correct confirmation text
+    if (deleteConfirmText !== '삭제') {
+      toast.error('삭제를 입력해주세요.')
+      return
+    }
+
+    setIsDeletingInterview(true)
+    try {
+      const response = await fetch(`/api/interviews/${selectedInterview.id}`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to delete interview')
+      }
+
+      toast.success('면접이 삭제되었습니다.')
+
+      // Reload interviews
+      const { interviews: updatedInterviews } = await getCurrentUserInterviewsClient()
+      setInterviews(updatedInterviews)
+
+      // Select first interview or navigate to dashboard
+      if (updatedInterviews.length > 0) {
+        setSelectedInterview(updatedInterviews[0])
+        router.push(`/interview?id=${updatedInterviews[0].id}`)
+      } else {
+        router.push('/dashboard')
+      }
+
+      // Close dialog and reset
+      setShowDeleteDialog(false)
+      setDeleteConfirmText("")
+    } catch (error) {
+      console.error('Error deleting interview:', error)
+      toast.error('면접 삭제 중 오류가 발생했습니다.')
+    } finally {
+      setIsDeletingInterview(false)
+    }
+  }
+
   const handleGenerateQuestions = async () => {
-    if (!interviewId) return
+    if (!selectedInterview?.id) return
 
     try {
-      const response = await fetch(`/api/interviews/${interviewId}/generate-questions`, {
+      const response = await fetch(`/api/interviews/${selectedInterview.id}/qa`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          comment: generationComment
+          type: 'questions_generated',
+          data: {}
         })
       })
 
       if (response.ok) {
-        console.log('Questions generation started')
+        const { jobId } = await response.json()
+        setCurrentJobId(jobId)
         setShowQuestionsDialog(false)
-        setGenerationComment("")
-        // You can add toast notification or refresh logic here
+        toast.info('질문 생성 중... (약 60-90초 소요)')
       } else {
-        console.error('Failed to start questions generation')
+        const error = await response.json()
+
+        // Handle insufficient tokens
+        if (error.error === 'INSUFFICIENT_TOKENS') {
+          toast.error(
+            `토큰이 부족합니다!\n필요: ${error.required} 토큰\n보유: ${error.available} 토큰`,
+            { duration: 5000 }
+          )
+        } else {
+          toast.error(error.message || error.error || '질문 생성 시작 실패')
+        }
       }
     } catch (error) {
       console.error('Error generating questions:', error)
+      toast.error('질문 생성 중 오류가 발생했습니다')
     }
   }
 
   const handleGenerateAnswers = async () => {
-    if (!interviewId) return
+    if (!selectedInterview?.id) return
+
+    // Validate selection
+    if (selectedItems.size === 0) {
+      toast.error('질문을 먼저 선택해주세요')
+      return
+    }
 
     try {
-      const response = await fetch(`/api/interviews/${interviewId}/generate-answers`, {
+      // Parse selected items to extract question info
+      const selectedQuestions: Array<{category: string, index: number, text: string}> = []
+
+      selectedItems.forEach(itemId => {
+        // Parse itemId format: "category_q_index" or "category_a_index"
+        const match = itemId.match(/^(.+)_(q|a)_(\d+)$/)
+        if (match && match[2] === 'q') {
+          const category = match[1]
+          const index = parseInt(match[3])
+
+          // Get question text from questionData
+          if (questionData && questionData[category] && questionData[category][index]) {
+            selectedQuestions.push({
+              category,
+              index,
+              text: questionData[category][index]
+            })
+          }
+        }
+      })
+
+      if (selectedQuestions.length === 0) {
+        toast.error('유효한 질문이 선택되지 않았습니다')
+        return
+      }
+
+      const response = await fetch(`/api/interviews/${selectedInterview.id}/qa`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          comment: generationComment
+          type: 'answers_generated',
+          data: {
+            selectedQuestions,
+            comment: generationComment
+          }
         })
       })
 
       if (response.ok) {
-        console.log('Answers generation started')
+        const { jobId } = await response.json()
+        setCurrentJobId(jobId)
         setShowAnswersDialog(false)
         setGenerationComment("")
-        // You can add toast notification or refresh logic here
+        toast.info(`답변 생성 중... ${selectedQuestions.length}개 질문 (약 60-90초 소요)`)
       } else {
-        console.error('Failed to start answers generation')
+        const error = await response.json()
+
+        // Handle insufficient tokens
+        if (error.error === 'INSUFFICIENT_TOKENS') {
+          toast.error(
+            `토큰이 부족합니다!\n필요: ${error.required} 토큰\n보유: ${error.available} 토큰`,
+            { duration: 5000 }
+          )
+        } else {
+          toast.error(error.message || error.error || '답변 생성 시작 실패')
+        }
       }
     } catch (error) {
       console.error('Error generating answers:', error)
+      toast.error('답변 생성 중 오류가 발생했습니다')
+    }
+  }
+
+  // Check if Zustand store is hydrated
+  useEffect(() => {
+    setIsHydrated(true)
+  }, [])
+
+  // Get current user and reset store if user changed
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      const newUserId = user?.id || null
+
+      // If user changed, reset the store
+      if (currentUserId && currentUserId !== newUserId) {
+        reset()
+        setHasInitialized(false)
+      }
+
+      setUserId(newUserId)
+      setCurrentUserId(newUserId)
+    }
+    getCurrentUser()
+  }, [setCurrentUserId, reset, currentUserId])
+
+  // Fetch interviews from Zustand if not already loaded
+  useEffect(() => {
+    const fetchInterviews = async () => {
+      if (!userId || hasInitialized || !isHydrated) return
+
+      // If we already have interviews data, don't fetch again
+      if (interviews.length > 0) {
+        setHasInitialized(true)
+        setLoadingInterviews(false)
+        return
+      }
+
+      try {
+        setLoadingInterviews(true)
+        const result = await getCurrentUserInterviewsClient({ limit: 50 })
+        setInterviews(result.interviews)
+        setHasInitialized(true)
+      } catch (error) {
+        console.error('Error fetching interviews:', error)
+        setInterviews([])
+        setHasInitialized(true)
+      } finally {
+        setLoadingInterviews(false)
+      }
+    }
+
+    if (userId && isHydrated) {
+      fetchInterviews()
+    }
+  }, [userId, interviews.length, hasInitialized, isHydrated, setInterviews, setLoadingInterviews])
+
+  // Set selected interview based on URL param or default to latest
+  useEffect(() => {
+    if (!isHydrated || interviews.length === 0) return
+
+    const interviewIdFromUrl = searchParams.get('id')
+
+    // If URL has ID and it matches current selection, skip
+    if (interviewIdFromUrl && selectedInterview?.id === interviewIdFromUrl) return
+
+    let targetInterview: Interview | null = null
+
+    if (interviewIdFromUrl) {
+      // Try to find interview from URL
+      targetInterview = interviews.find(i => i.id === interviewIdFromUrl) || interviews[0]
+    } else {
+      // No URL param, use latest interview
+      targetInterview = interviews[0]
+    }
+
+    // Set selected interview and update URL
+    if (targetInterview) {
+      setSelectedInterview(targetInterview)
+
+      // Update URL if it doesn't match (use replace to avoid history entry)
+      if (!interviewIdFromUrl || interviewIdFromUrl !== targetInterview.id) {
+        const params = new URLSearchParams(searchParams.toString())
+        params.set('id', targetInterview.id)
+        // Use window.history.replaceState for smoother navigation without triggering re-render
+        window.history.replaceState(null, '', `/interview?${params.toString()}`)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [interviews, isHydrated, searchParams])
+
+  // Fetch questions and answers when selected interview changes
+  useEffect(() => {
+    if (selectedInterview?.id) {
+      fetchInterviewData()
+      fetchHistory()
+    }
+  }, [selectedInterview])
+
+  // Handle job completion
+  useEffect(() => {
+    if (!job) {
+      setIsCompletingJob(false)
+      return
+    }
+
+    if (job.status === 'completed') {
+      // Mark as completing to keep loaders visible
+      setIsCompletingJob(true)
+
+      toast.success('생성이 완료되었습니다!')
+
+      // Refresh tokens in navbar
+      refreshTokens()
+
+      // DON'T clear job yet - keep loaders showing until data is ready
+      // Smoothly update by fetching latest Q&A data
+      if (selectedInterview?.id) {
+        // Fetch the latest questions and answers (which are the newly generated ones)
+        Promise.all([
+          fetch(`/api/interviews/${selectedInterview.id}/questions`).then(res => res.json()),
+          fetch(`/api/interviews/${selectedInterview.id}/answers`).then(res => res.json()),
+          fetchHistory()
+        ])
+          .then(([questions, answers]) => {
+            console.log('Received questions:', questions)
+            console.log('Received answers:', answers)
+
+            // Update state smoothly without full page reload
+            // API returns array of objects with question_data/answer_data fields
+            if (questions && questions.length > 0 && questions[0].question_data) {
+              setQuestionData(questions[0].question_data)
+              console.log('Updated question data')
+            }
+
+            // For question generation/regeneration, always update answers (clears old answers)
+            // For answer generation, update if new answers exist
+            if (job?.type === 'questions_generated' || job?.type === 'question_regenerated' || job?.type === 'question_edited') {
+              // Question changed = clear/reset answers with fresh empty structure
+              if (answers && answers.length > 0 && answers[0].answer_data) {
+                setAnswerData(answers[0].answer_data)
+                console.log('Updated answer data (cleared for new questions)')
+              } else {
+                // Fallback: create empty structure if API doesn't return it
+                const emptyAnswers = {
+                  general_personality: Array(10).fill(null),
+                  cover_letter_personality: Array(10).fill(null),
+                  cover_letter_competency: Array(10).fill(null)
+                }
+                setAnswerData(emptyAnswers)
+                console.log('Set empty answer data for new questions')
+              }
+            } else if (answers && answers.length > 0 && answers[0].answer_data) {
+              // For answer operations, just update normally
+              setAnswerData(answers[0].answer_data)
+              console.log('Updated answer data')
+            }
+
+            // Only NOW clear the job and completing flag - data is ready, smooth transition!
+            setIsCompletingJob(false)
+            setCurrentJobId(null)
+          })
+          .catch(err => {
+            console.error('Error updating Q&A data:', err)
+            // Fallback to full refresh
+            Promise.all([fetchInterviewData(), fetchHistory()]).then(() => {
+              setIsCompletingJob(false)
+              setCurrentJobId(null)
+            })
+          })
+      } else {
+        setIsCompletingJob(false)
+        setCurrentJobId(null)
+      }
+    } else if (job.status === 'failed') {
+      toast.error(job.error_message || '생성에 실패했습니다')
+      setIsCompletingJob(false)
+      setCurrentJobId(null)
+    }
+  }, [job?.status])
+
+  // Helper function to fetch interview data
+  const fetchInterviewData = async () => {
+    if (!selectedInterview?.id) return
+
+    try {
+      setLoading(true)
+      setError(null)
+
+      const [questionsResponse, answersResponse] = await Promise.all([
+        fetch(`/api/interviews/${selectedInterview.id}/questions`),
+        fetch(`/api/interviews/${selectedInterview.id}/answers`)
+      ])
+
+      let hasData = false
+
+      if (questionsResponse.ok) {
+        const questions = await questionsResponse.json()
+        if (questions.length > 0) {
+          setQuestionData(questions[0].question_data)
+          hasData = true
+        } else {
+          setQuestionData(null)
+        }
+      } else {
+        setQuestionData(null)
+      }
+
+      if (answersResponse.ok) {
+        const answers = await answersResponse.json()
+        if (answers.length > 0) {
+          setAnswerData(answers[0].answer_data)
+        } else {
+          setAnswerData(null)
+        }
+      } else {
+        setAnswerData(null)
+      }
+
+      if (!hasData) {
+        setError('질문 데이터를 찾을 수 없습니다')
+      }
+
+    } catch (err) {
+      console.error('Error fetching interview data:', err)
+      setError(err instanceof Error ? err.message : 'Unknown error occurred')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Handle Q&A item operations
+  const handleEditQA = (type: 'question' | 'answer', category: string, index: number, text: string) => {
+    setSelectedQAItem({ type, category, index, text })
+    setQaOperationComment("")
+    setShowEditQADialog(true)
+  }
+
+  const handleRegenerateQA = (type: 'question' | 'answer', category: string, index: number, text: string) => {
+    setSelectedQAItem({ type, category, index, text })
+    setQaOperationComment("")
+    setShowRegenerateQADialog(true)
+  }
+
+  const submitEditQA = async () => {
+    if (!selectedInterview?.id || !selectedQAItem) return
+
+    try {
+      const jobType = selectedQAItem.type === 'question' ? 'question_edited' : 'answer_edited'
+
+      const response = await fetch(`/api/interviews/${selectedInterview.id}/qa`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: jobType,
+          data: {
+            category: selectedQAItem.category,
+            index: selectedQAItem.index,
+            comment: qaOperationComment
+          }
+        })
+      })
+
+      if (response.ok) {
+        const { jobId } = await response.json()
+        setCurrentJobId(jobId)
+        setShowEditQADialog(false)
+        setQaOperationComment("")
+        toast.info(`${selectedQAItem.type === 'question' ? '질문' : '답변'} 수정 중...`)
+      } else {
+        const error = await response.json()
+
+        // Handle insufficient tokens
+        if (error.error === 'INSUFFICIENT_TOKENS') {
+          toast.error(
+            `토큰이 부족합니다!\n필요: ${error.required} 토큰\n보유: ${error.available} 토큰`,
+            { duration: 5000 }
+          )
+        } else {
+          toast.error(error.message || error.error || '수정 요청 실패')
+        }
+      }
+    } catch (error) {
+      console.error('Error submitting edit:', error)
+      toast.error('수정 중 오류가 발생했습니다')
+    }
+  }
+
+  const submitRegenerateQA = async () => {
+    if (!selectedInterview?.id || !selectedQAItem) return
+
+    try {
+      const jobType = selectedQAItem.type === 'question' ? 'question_regenerated' : 'answer_regenerated'
+
+      const response = await fetch(`/api/interviews/${selectedInterview.id}/qa`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: jobType,
+          data: {
+            category: selectedQAItem.category,
+            index: selectedQAItem.index
+            // No comment for regenerate - it's a pure regeneration
+          }
+        })
+      })
+
+      if (response.ok) {
+        const { jobId } = await response.json()
+        setCurrentJobId(jobId)
+        setShowRegenerateQADialog(false)
+        toast.info(`${selectedQAItem.type === 'question' ? '질문' : '답변'} 재생성 중...`)
+      } else {
+        const error = await response.json()
+
+        // Handle insufficient tokens
+        if (error.error === 'INSUFFICIENT_TOKENS') {
+          toast.error(
+            `토큰이 부족합니다!\n필요: ${error.required} 토큰\n보유: ${error.available} 토큰`,
+            { duration: 5000 }
+          )
+        } else {
+          toast.error(error.message || error.error || '재생성 요청 실패')
+        }
+      }
+    } catch (error) {
+      console.error('Error submitting regenerate:', error)
+      toast.error('재생성 중 오류가 발생했습니다')
+    }
+  }
+
+  // Fetch QA history
+  const fetchHistory = async () => {
+    if (!selectedInterview?.id) {
+      console.log('fetchHistory: no selectedInterview')
+      return
+    }
+
+    console.log('fetchHistory: fetching for interview', selectedInterview.id)
+    try {
+      const response = await fetch(`/api/interviews/${selectedInterview.id}/history`)
+      console.log('fetchHistory response:', response.status)
+      if (response.ok) {
+        const { history } = await response.json()
+        console.log('fetchHistory data:', history)
+        setQaHistory(history || [])
+      } else {
+        console.error('fetchHistory failed:', response.status, await response.text())
+      }
+    } catch (error) {
+      console.error('Error fetching history:', error)
+    }
+  }
+
+  // Load a specific QA version
+  const loadQaVersion = async (qaId: string) => {
+    if (!selectedInterview?.id) return
+
+    try {
+      const response = await fetch(`/api/interviews/${selectedInterview.id}/qas/${qaId}`)
+      if (response.ok) {
+        const { qa } = await response.json()
+        setQuestionData(qa.questions_data)
+        setAnswerData(qa.answers_data)
+        setViewingQaId(qaId)
+        setSelectedHistoryId(qaId)
+      }
+    } catch (error) {
+      console.error('Error loading QA version:', error)
+      toast.error('버전 불러오기에 실패했습니다')
+    }
+  }
+
+  // Set QA version as default
+  const setAsDefaultVersion = async (qaId: string) => {
+    if (!selectedInterview?.id) return
+
+    try {
+      const response = await fetch(`/api/interviews/${selectedInterview.id}/qas/${qaId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ setAsDefault: true })
+      })
+
+      if (response.ok) {
+        toast.success('기본 버전으로 설정되었습니다')
+        setViewingQaId(null)
+        fetchHistory()
+        fetchInterviewData()
+      }
+    } catch (error) {
+      console.error('Error setting default:', error)
+      toast.error('기본 버전 설정에 실패했습니다')
     }
   }
 
@@ -316,181 +1473,510 @@ export default function Page() {
     }
   }, [showEditDropdown])
 
-  useEffect(() => {
-    const fetchLatestData = async () => {
-      try {
-        setLoading(true)
-
-        // First get the latest interview
-        const interviewsResponse = await fetch('/api/interviews/latest')
-        if (!interviewsResponse.ok) {
-          throw new Error('Failed to fetch latest interview')
-        }
-        const latestInterview = await interviewsResponse.json()
-
-        if (!latestInterview?.id) {
-          throw new Error('No interviews found')
-        }
-
-        // Set company name and job position from interview data
-        setCompanyName(latestInterview.company_name || "회사명")
-        setJobPosition(latestInterview.position || "직무명")
-        setInterviewId(latestInterview.id)
-
-        // Then get questions and answers for that interview
-        const [questionsResponse, answersResponse] = await Promise.all([
-          fetch(`/api/interviews/${latestInterview.id}/questions`),
-          fetch(`/api/interviews/${latestInterview.id}/answers`)
-        ])
-
-        if (questionsResponse.ok) {
-          const questions = await questionsResponse.json()
-          if (questions.length > 0) {
-            setQuestionData(questions[0].question_data)
-          }
-        }
-
-        if (answersResponse.ok) {
-          const answers = await answersResponse.json()
-          if (answers.length > 0) {
-            setAnswerData(answers[0].answer_data)
-          }
-        }
-
-      } catch (err) {
-        console.error('Error fetching data:', err)
-        setError(err instanceof Error ? err.message : 'Unknown error occurred')
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchLatestData()
-  }, [])
-
   return (
     <div className="h-[calc(100vh-60px)] overflow-hidden">
       {/* Desktop layout */}
       <div className="hidden sm:flex sm:justify-center sm:items-start sm:gap-4 h-full">
         <div className="w-full max-w-4xl flex gap-4 h-full">
           <div className="w-full flex flex-col justify-center items-center gap-4 h-full">
-            <div className="w-full max-w-4xl p-4 h-full flex flex-col">
+            <div className="w-full px-4 pb-4 h-full flex flex-col">
               <div className="h-full flex flex-col border border-gray-300 rounded-md bg-white">
                 {/* Company Header Section - Inside Card */}
                 <div className="h-15 px-4 border-b border-gray-200 flex-shrink-0 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <h1 className="text-xl font-bold text-left text-gray-900">
-                      {companyName}
-                    </h1>
-                    <span className="text-sm text-gray-500">
-                      {jobPosition}
-                    </span>
+                    {!isHydrated || !hasInitialized || (interviews.length > 0 && !selectedInterview) ? (
+                      <Loader className="h-4 w-4 animate-spin text-gray-900" />
+                    ) : hasInitialized && interviews.length === 0 ? (
+                      <h1 className="text-xl font-bold text-left text-gray-900">면접이 없습니다</h1>
+                    ) : null}
+                    {!(!isHydrated || !hasInitialized || (interviews.length > 0 && !selectedInterview)) && interviews.length > 0 && (
+                      <Select
+                        value={selectedInterview?.id || ""}
+                        onValueChange={handleInterviewChange}
+                      >
+                        <SelectTrigger className="border-none shadow-none p-0 h-auto gap-2 hover:bg-transparent focus:ring-0 focus:ring-offset-0 focus-visible:ring-0 focus-visible:ring-offset-0">
+                          <h1 className="text-xl font-bold text-left text-gray-900">
+                            {selectedInterview?.company_name || "회사명"}
+                          </h1>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {interviews.map((interview) => (
+                            <SelectItem key={interview.id} value={interview.id} className="cursor-pointer focus:text-foreground">
+                              {interview.company_name} - {interview.position}
+                            </SelectItem>
+                          ))}
+                          <SelectItem value="create-new" className="text-blue-600 font-medium cursor-pointer focus:text-blue-600">
+                            새 면접 생성
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
+                    {selectedInterview && (
+                      <span className="text-sm text-gray-500">
+                        {selectedInterview.position}
+                      </span>
+                    )}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" className="h-8 text-sm" onClick={() => setShowQuestionsDialog(true)}>
-                      질문지 생성
-                    </Button>
-                    <Button variant="outline" className="h-8 text-sm" onClick={() => setShowAnswersDialog(true)}>
-                      답변지 생성
-                    </Button>
-                    <Button variant="outline" className="h-8 text-sm" disabled={selectedItems.size !== 1} onClick={handleEditClick}>
-                      수정
-                    </Button>
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Button variant="outline" className="h-8 w-8 p-0">
-                          <History className="h-4 w-4" />
+                  <div className="flex items-center gap-3">
+                    {/* Tabs for View Switching */}
+                    <Tabs value={activeView} onValueChange={(value) => setActiveView(value as 'info' | 'qa')} className="h-8">
+                      <TabsList className="h-8 bg-gray-100">
+                        <TabsTrigger value="qa" className="h-7 text-sm px-3 cursor-pointer">
+                          질문/답변
+                        </TabsTrigger>
+                        <TabsTrigger value="info" className="h-7 text-sm px-3 cursor-pointer">
+                          기본정보
+                        </TabsTrigger>
+                      </TabsList>
+                    </Tabs>
+
+                    {/* More Menu */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-8 w-8"
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
                         </Button>
-                      </DialogTrigger>
-                      <DialogContent className="max-w-4xl p-0">
-                        <DialogHeader className="px-6 py-4">
-                          <DialogTitle>History</DialogTitle>
-                        </DialogHeader>
-                        <div className="px-0">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>Date</TableHead>
-                                <TableHead>Type</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead>Actions</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              <TableRow>
-                                <TableCell>2024-01-15</TableCell>
-                                <TableCell>Questions</TableCell>
-                                <TableCell>Completed</TableCell>
-                                <TableCell>View</TableCell>
-                              </TableRow>
-                              <TableRow>
-                                <TableCell>2024-01-14</TableCell>
-                                <TableCell>Answers</TableCell>
-                                <TableCell>In Progress</TableCell>
-                                <TableCell>View</TableCell>
-                              </TableRow>
-                              <TableRow>
-                                <TableCell>2024-01-13</TableCell>
-                                <TableCell>Questions</TableCell>
-                                <TableCell>Failed</TableCell>
-                                <TableCell>Retry</TableCell>
-                              </TableRow>
-                            </TableBody>
-                          </Table>
-                        </div>
-                      </DialogContent>
-                    </Dialog>
-                    <Select value={selectedVersion} onValueChange={setSelectedVersion}>
-                      <SelectTrigger className="w-24 !h-8 text-sm !min-h-0 !py-0">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="최신">최신</SelectItem>
-                        <div className="px-2 py-1 border-t border-gray-200">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="w-full h-8 justify-start text-sm"
-                          >
-                            <Plus className="h-3 w-3 mr-2" />
-                            새로 저장
-                          </Button>
-                        </div>
-                      </SelectContent>
-                    </Select>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start">
+                        <DropdownMenuItem
+                          onClick={() => setShowDeleteDialog(true)}
+                          className="text-red-600 cursor-pointer focus:text-red-600"
+                        >
+                          삭제
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </div>
 
-                {/* Content that fills exact remaining space */}
-                <div className="flex-1 overflow-y-scroll">
-                  {loading ? (
-                    <div className="flex items-center justify-center h-full">
-                      <Loader className="h-4 w-4 animate-spin text-black" />
-                    </div>
-                  ) : error ? (
-                    <div className="flex items-center justify-center h-full text-red-600">
-                      {error}
-                    </div>
-                  ) : questionData ? (
-                    <div>
-                      <div>
-                        {formatQuestionDataAsHTML(
-                          questionData,
-                          answerData,
-                          selectedItems,
-                          handleItemClick,
-                          showEditDropdown,
-                          editText,
-                          setEditText,
-                          handleEditSave,
-                          handleEditCancel
-                        )}
+                {/* Tab Content Area */}
+                <div className="flex-1 overflow-hidden flex flex-col">
+                  {activeView === 'info' ? (
+                    /* Info View Content */
+                    <div className="h-full overflow-y-scroll">
+                      <div className="p-6">
+                        <Form {...form}>
+                          <form onSubmit={form.handleSubmit(handleInfoFormSubmit)}>
+                            {/* Required Fields */}
+                            <div className="space-y-4">
+                              <FormField control={form.control} name="companyName" render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>기업명 *</FormLabel>
+                                  <FormControl><Input placeholder="기업명을 입력하세요" {...field} /></FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )} />
+                              <FormField control={form.control} name="position" render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>직무 *</FormLabel>
+                                  <FormControl><Input placeholder="직무를 입력하세요" {...field} /></FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )} />
+                              <FormField control={form.control} name="jobPosting" render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>채용공고 *</FormLabel>
+                                  <FormControl><Textarea placeholder="채용공고 내용을 입력하세요" className="min-h-[100px]" {...field} /></FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )} />
+                              <FormField control={form.control} name="coverLetter" render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>자기소개서 *</FormLabel>
+                                  <FormControl><Textarea placeholder="자기소개서 내용을 입력하세요" className="min-h-[100px]" {...field} /></FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )} />
+                              <FormField control={form.control} name="resume" render={({ field }) => (
+                                <FormItem>
+                                  <div className="flex justify-between items-center" style={{height: '14px'}}>
+                                    <FormLabel>이력서 *</FormLabel>
+                                    <label
+                                      className={`text-sm underline cursor-pointer ${
+                                        isProcessingDocument ? 'text-gray-400 cursor-not-allowed' : 'text-blue-600 hover:text-blue-800'
+                                      }`}
+                                    >
+                                      <input
+                                        type="file"
+                                        accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                                        onChange={handleDocumentUpload}
+                                        className="hidden"
+                                        disabled={isProcessingDocument}
+                                      />
+                                      {isProcessingDocument ? '처리 중...' : '파일 첨부 (PDF/Word)'}
+                                    </label>
+                                  </div>
+                                  <FormControl><Textarea placeholder="이력서 내용을 입력하세요" className="min-h-[100px]" {...field} /></FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )} />
+                              <FormField control={form.control} name="companyInfo" render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>기업 정보 *</FormLabel>
+                                  <FormControl><Textarea placeholder="기업에 대한 정보를 입력하세요" className="min-h-[100px]" {...field} /></FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )} />
+                            </div>
+
+                            {/* Optional Fields */}
+                            <div className="space-y-4 mt-4">
+                              <FormField control={form.control} name="expectedQuestions" render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>예상 질문 (선택)</FormLabel>
+                                  <FormControl><Textarea placeholder="면접에서 예상되는 질문들을 입력하세요" className="min-h-[100px]" {...field} /></FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )} />
+                              <FormField control={form.control} name="companyEvaluation" render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>기업 평가 항목 (선택)</FormLabel>
+                                  <FormControl><Textarea placeholder="기업이 공개한 평가 항목 및 비중을 입력하세요" className="min-h-[100px]" {...field} /></FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )} />
+                              <FormField control={form.control} name="otherNotes" render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>기타 (선택)</FormLabel>
+                                  <FormControl><Textarea placeholder="기타 추가 정보를 입력하세요" className="min-h-[100px]" {...field} /></FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )} />
+                            </div>
+                          </form>
+                        </Form>
                       </div>
                     </div>
                   ) : (
-                    <div className="flex items-center justify-center h-full text-gray-500">
-                      질문 데이터를 찾을 수 없습니다
-                    </div>
+                    /* Q&A View Content */
+                    <ResizablePanelGroup direction="horizontal" className="flex-1">
+                      {/* Left Panel - Main Content */}
+                      <ResizablePanel defaultSize={isHistoryPanelOpen ? 67 : 100} minSize={30}>
+                        <div className="h-full overflow-y-scroll">
+                      <>
+                        {!selectedInterview ? (
+                          /* No interview selected yet - show skeleton */
+                          <div className="flex items-center justify-center h-full">
+                            <Loader className="h-4 w-4 animate-spin text-black" />
+                          </div>
+                        ) : loading ? (
+                          /* Loading Q&A data */
+                          <div className="flex items-center justify-center h-full">
+                            <Loader className="h-4 w-4 animate-spin text-black" />
+                          </div>
+                        ) : error ? (
+                          <div className="flex flex-col items-center justify-center h-full gap-3">
+                            <p className="text-gray-500 text-center text-sm">
+                              아직 생성된 질문지가 없습니다.<br />
+                              질문지를 생성하여 면접을 준비해보세요.
+                            </p>
+                            <Button
+                              variant="outline"
+                              className="h-8 text-sm"
+                              onClick={() => setShowQuestionsDialog(true)}
+                            >
+                              질문지 생성
+                            </Button>
+                          </div>
+                        ) : isPolling && job?.type === 'questions_generated' && !questionData ? (
+                          // Generating 30 questions - show skeleton loaders
+                          <div>
+                            <div className="mb-0">
+                              <h3 className="font-bold text-sm mb-0 px-4 py-3 bg-gray-50 border-b border-gray-200 sticky top-0 z-10">일반 인성면접 질문 (10개)</h3>
+                              <div>
+                                {Array.from({ length: 10 }, (_, i) => (
+                                  <div key={i} className="px-2 py-3 border-b border-gray-200 flex items-start gap-2">
+                                    <span className="w-6 flex-shrink-0 text-gray-400">{i + 1}.</span>
+                                    <Loader className="h-4 w-4 animate-spin text-gray-400" />
+                                    <span className="text-gray-400 leading-6">질문 생성 중...</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="mb-0">
+                              <h3 className="font-bold text-sm mb-0 px-4 py-3 bg-gray-50 border-b border-gray-200 sticky top-0 z-10">자기소개서 기반 인성면접 질문 (10개)</h3>
+                              <div>
+                                {Array.from({ length: 10 }, (_, i) => (
+                                  <div key={i} className="px-2 py-3 border-b border-gray-200 flex items-start gap-2">
+                                    <span className="w-6 flex-shrink-0 text-gray-400">{i + 1}.</span>
+                                    <Loader className="h-4 w-4 animate-spin text-gray-400" />
+                                    <span className="text-gray-400 leading-6">질문 생성 중...</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="mb-0">
+                              <h3 className="font-bold text-sm mb-0 px-4 py-3 bg-gray-50 border-b border-gray-200 sticky top-0 z-10">자기소개서 기반 직무 역량 확인 질문 (10개)</h3>
+                              <div>
+                                {Array.from({ length: 10 }, (_, i) => (
+                                  <div key={i} className="px-2 py-3 border-b border-gray-200 flex items-start gap-2">
+                                    <span className="w-6 flex-shrink-0 text-gray-400">{i + 1}.</span>
+                                    <Loader className="h-4 w-4 animate-spin text-gray-400" />
+                                    <span className="text-gray-400 leading-6">질문 생성 중...</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        ) : questionData ? (
+                          <div>
+                            <div>
+                              {formatQuestionDataAsHTML(
+                                questionData,
+                                answerData,
+                                selectedItems,
+                                handleItemClick,
+                                showEditDropdown,
+                                editText,
+                                setEditText,
+                                handleEditSave,
+                                handleEditCancel,
+                                handleEditQA,
+                                handleRegenerateQA,
+                                job,
+                                isPolling
+                              )}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center justify-center h-full gap-3">
+                            <p className="text-gray-500 text-center text-sm">
+                              아직 생성된 질문지가 없습니다.<br />
+                              질문지를 생성하여 면접을 준비해보세요.
+                            </p>
+                            <Button
+                              variant="outline"
+                              className="h-8 text-sm"
+                              onClick={() => setShowQuestionsDialog(true)}
+                            >
+                              질문지 생성
+                            </Button>
+                          </div>
+                        )}
+                      </>
+                        </div>
+                      </ResizablePanel>
+
+                      {/* Right Panel - History */}
+                      {isHistoryPanelOpen && (
+                        <>
+                          <ResizableHandle withHandle />
+                          <ResizablePanel defaultSize={33} minSize={20} maxSize={50}>
+                            <div className="h-full flex flex-col">
+                        {/* History Header */}
+                        <div className="h-[45px] px-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
+                          <div className="flex items-center gap-2">
+                            <History className="h-4 w-4" />
+                            <h2 className="text-sm font-bold">히스토리</h2>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0 hover:bg-gray-100"
+                            onClick={() => setIsHistoryPanelOpen(false)}
+                          >
+                            ✕
+                          </Button>
+                        </div>
+
+                        {/* History Content - Scrollable */}
+                        <div className="flex-1 overflow-y-auto min-h-0 flex flex-col">
+                          <Table className="flex-1">
+                            <TableHeader>
+                              <TableRow className="h-11">
+                                <TableHead className="text-sm px-2 py-3">이름</TableHead>
+                                <TableHead className="text-sm px-2 py-3">변경사항</TableHead>
+                                <TableHead className="text-sm px-2 py-3">날짜</TableHead>
+                                <TableHead className="text-sm px-2 py-3 w-12"></TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {qaHistory.length === 0 ? (
+                                <TableRow>
+                                  <TableCell colSpan={4} className="text-center text-sm text-gray-500 py-8 h-20">
+                                    히스토리가 없습니다
+                                  </TableCell>
+                                </TableRow>
+                              ) : (
+                                qaHistory.map((qa, index) => {
+                                  const typeLabel = qa.type === 'questions_generated' ? '질문지 생성' :
+                                                   qa.type === 'answers_generated' ? '답변지 생성' :
+                                                   qa.type === 'question_regenerated' ? '질문 재생성' :
+                                                   qa.type === 'answer_regenerated' ? '답변 재생성' :
+                                                   qa.type === 'question_edited' ? '질문 수정' :
+                                                   qa.type === 'answer_edited' ? '답변 수정' : qa.type
+
+                                  const date = new Date(qa.created_at)
+                                  const formattedDate = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`
+                                  const isLastItem = index === qaHistory.length - 1
+
+                                  return (
+                                    <TableRow
+                                      key={qa.id}
+                                      className={`cursor-pointer transition-colors h-11 ${
+                                        selectedHistoryId === qa.id ? 'bg-blue-50' : 'hover:bg-gray-50'
+                                      } ${isLastItem ? '[&>td]:border-b' : ''}`}
+                                      onClick={() => loadQaVersion(qa.id)}
+                                    >
+                                      <TableCell className="text-sm px-2 py-3">
+                                        <div className="flex items-center gap-2">
+                                          {qa.name}
+                                          {qa.is_default && (
+                                            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">기본</span>
+                                          )}
+                                        </div>
+                                      </TableCell>
+                                      <TableCell className="text-sm px-2 py-3">{typeLabel}</TableCell>
+                                      <TableCell className="text-sm px-2 py-3">{formattedDate}</TableCell>
+                                      <TableCell className="text-sm px-2 py-3">
+                                        <DropdownMenu>
+                                          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                            <Button
+                                              variant="ghost"
+                                              size="sm"
+                                              className="h-6 w-6 p-0 text-gray-300 hover:text-black hover:bg-transparent"
+                                            >
+                                              <MoreVertical className="h-4 w-4" />
+                                            </Button>
+                                          </DropdownMenuTrigger>
+                                          <DropdownMenuContent align="end">
+                                            <DropdownMenuItem
+                                              className="cursor-pointer"
+                                              onClick={(e) => {
+                                                e.stopPropagation()
+                                                // TODO: Implement rename
+                                                toast.info('이름 변경 기능은 준비 중입니다')
+                                              }}
+                                            >
+                                              이름 변경
+                                            </DropdownMenuItem>
+                                            {!qa.is_default && (
+                                              <DropdownMenuItem
+                                                className="cursor-pointer"
+                                                onClick={(e) => {
+                                                  e.stopPropagation()
+                                                  setAsDefaultVersion(qa.id)
+                                                }}
+                                              >
+                                                기본으로 설정
+                                              </DropdownMenuItem>
+                                            )}
+                                          </DropdownMenuContent>
+                                        </DropdownMenu>
+                                      </TableCell>
+                                    </TableRow>
+                                  )
+                                })
+                              )}
+                            </TableBody>
+                          </Table>
+                        </div>
+                            </div>
+                          </ResizablePanel>
+                        </>
+                      )}
+                    </ResizablePanelGroup>
+                  )}
+                </div>
+
+                {/* Sticky Bottom Action Bar */}
+                <div className="h-[60px] border-t border-gray-200 px-4 bg-white/40 backdrop-blur-sm flex items-center justify-end gap-2">
+                  {activeView === 'info' ? (
+                    /* Info View Actions */
+                    <Button
+                      type="submit"
+                      className="h-8 bg-blue-600 hover:bg-blue-700 text-white"
+                      disabled={isSubmitting}
+                      onClick={() => form.handleSubmit(handleInfoFormSubmit)()}
+                    >
+                      {isSubmitting ? '저장 중...' : '저장'}
+                    </Button>
+                  ) : (
+                    /* Q&A View Actions */
+                    <>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-8 w-8"
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start">
+                          <DropdownMenuItem
+                            onClick={() => {
+                              if (!questionData) return
+                              const allItems = new Set<string>()
+                              // Add all question IDs
+                              for (let i = 0; i < 10; i++) {
+                                allItems.add(`general_personality_q_${i}`)
+                                allItems.add(`cover_letter_personality_q_${i}`)
+                                allItems.add(`cover_letter_competency_q_${i}`)
+                              }
+                              setSelectedItems(allItems)
+                            }}
+                            className="cursor-pointer"
+                          >
+                            전체 질문 선택
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => setSelectedItems(new Set())}
+                            className="cursor-pointer"
+                          >
+                            선택 해제
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => setIsHistoryPanelOpen(!isHistoryPanelOpen)}
+                      >
+                        <History className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        className="h-8 bg-blue-600 hover:bg-blue-700 text-white"
+                        onClick={() => setShowQuestionsDialog(true)}
+                        disabled={isPolling}
+                      >
+                        {isPolling && job?.type === 'questions_generated' ? (
+                          <>
+                            <Loader className="h-3 w-3 animate-spin mr-1" />
+                            생성 중...
+                          </>
+                        ) : (
+                          '질문지 생성'
+                        )}
+                      </Button>
+                      <Button
+                        className="h-8 bg-blue-600 hover:bg-blue-700 text-white relative"
+                        onClick={() => setShowAnswersDialog(true)}
+                        disabled={isPolling || selectedItems.size === 0}
+                      >
+                        {isPolling && job?.type === 'answers_generated' ? (
+                          <>
+                            <Loader className="h-3 w-3 animate-spin mr-1" />
+                            생성 중...
+                          </>
+                        ) : (
+                          <>
+                            답변지 생성
+                            {selectedItems.size > 0 && (
+                              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                                {selectedItems.size}
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </Button>
+                    </>
                   )}
                 </div>
               </div>
@@ -507,9 +1993,35 @@ export default function Page() {
               <div className="h-full flex flex-col border border-gray-300 rounded-md bg-white">
                 {/* Company Header Section - Inside Card Mobile */}
                 <div className="p-4 border-b border-gray-200 flex-shrink-0">
-                  <h1 className="text-xl font-bold text-left text-gray-900">
-                    {companyName}
-                  </h1>
+                  {!isHydrated || isLoadingInterviews ? (
+                    <div className="flex items-center gap-2">
+                      <Loader className="h-4 w-4 animate-spin text-gray-900" />
+                      <h1 className="text-xl font-bold text-left text-gray-900">로딩중...</h1>
+                    </div>
+                  ) : interviews.length === 0 ? (
+                    <h1 className="text-xl font-bold text-left text-gray-900">면접이 없습니다</h1>
+                  ) : (
+                    <Select
+                      value={selectedInterview?.id || ""}
+                      onValueChange={handleInterviewChange}
+                    >
+                      <SelectTrigger className="border-none shadow-none p-0 h-auto gap-2 hover:bg-transparent focus:ring-0 focus:ring-offset-0 focus-visible:ring-0 focus-visible:ring-offset-0">
+                        <h1 className="text-xl font-bold text-left text-gray-900">
+                          {selectedInterview?.company_name || "회사명"}
+                        </h1>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {interviews.map((interview) => (
+                          <SelectItem key={interview.id} value={interview.id} className="cursor-pointer">
+                            {interview.company_name} - {interview.position}
+                          </SelectItem>
+                        ))}
+                        <SelectItem value="create-new" className="text-blue-600 font-medium cursor-pointer">
+                          + 새 면접 생성
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
 
                 {/* Content that fills exact remaining space Mobile */}
@@ -519,8 +2031,58 @@ export default function Page() {
                       <Loader className="h-4 w-4 animate-spin text-black" />
                     </div>
                   ) : error ? (
-                    <div className="flex items-center justify-center h-full text-red-600">
-                      {error}
+                    <div className="flex flex-col items-center justify-center h-full gap-3">
+                      <p className="text-gray-500 text-center text-sm">
+                        아직 생성된 질문지가 없습니다.<br />
+                        질문지를 생성하여 면접을 준비해보세요.
+                      </p>
+                      <Button
+                        variant="outline"
+                        className="h-8 text-sm"
+                        onClick={() => setShowQuestionsDialog(true)}
+                      >
+                        질문지 생성
+                      </Button>
+                    </div>
+                  ) : isPolling && job?.type === 'questions_generated' && !questionData ? (
+                    // Generating 30 questions - show skeleton loaders
+                    <div>
+                      <div className="mb-0">
+                        <h3 className="font-bold text-sm mb-0 px-4 py-3 bg-gray-50 border-b border-gray-200 sticky top-0 z-10">일반 인성면접 질문 (10개)</h3>
+                        <div>
+                          {Array.from({ length: 10 }, (_, i) => (
+                            <div key={i} className="px-2 py-3 border-b border-gray-200 flex items-start gap-2">
+                              <span className="w-6 flex-shrink-0 text-gray-400">{i + 1}.</span>
+                              <Loader className="h-4 w-4 animate-spin text-gray-400" />
+                              <span className="text-gray-400 leading-6">질문 생성 중...</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="mb-0">
+                        <h3 className="font-bold text-sm mb-0 px-4 py-3 bg-gray-50 border-b border-gray-200 sticky top-0 z-10">자소서 기반 인성면접 질문 (10개)</h3>
+                        <div>
+                          {Array.from({ length: 10 }, (_, i) => (
+                            <div key={i} className="px-2 py-3 border-b border-gray-200 flex items-start gap-2">
+                              <span className="w-6 flex-shrink-0 text-gray-400">{i + 11}.</span>
+                              <Loader className="h-4 w-4 animate-spin text-gray-400" />
+                              <span className="text-gray-400 leading-6">질문 생성 중...</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="mb-0">
+                        <h3 className="font-bold text-sm mb-0 px-4 py-3 bg-gray-50 border-b border-gray-200 sticky top-0 z-10">자소서 기반 역량면접 질문 (10개)</h3>
+                        <div>
+                          {Array.from({ length: 10 }, (_, i) => (
+                            <div key={i} className="px-2 py-3 border-b border-gray-200 flex items-start gap-2">
+                              <span className="w-6 flex-shrink-0 text-gray-400">{i + 21}.</span>
+                              <Loader className="h-4 w-4 animate-spin text-gray-400" />
+                              <span className="text-gray-400 leading-6">질문 생성 중...</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   ) : questionData ? (
                     <div>
@@ -534,13 +2096,27 @@ export default function Page() {
                           editText,
                           setEditText,
                           handleEditSave,
-                          handleEditCancel
+                          handleEditCancel,
+                          handleEditQA,
+                          handleRegenerateQA,
+                          job,
+                          isPolling
                         )}
                       </div>
                     </div>
                   ) : (
-                    <div className="flex items-center justify-center h-full text-gray-500">
-                      질문 데이터를 찾을 수 없습니다
+                    <div className="flex flex-col items-center justify-center h-full gap-3">
+                      <p className="text-gray-500 text-center text-sm">
+                        아직 생성된 질문지가 없습니다.<br />
+                        질문지를 생성하여 면접을 준비해보세요.
+                      </p>
+                      <Button
+                        variant="outline"
+                        className="h-8 text-sm"
+                        onClick={() => setShowQuestionsDialog(true)}
+                      >
+                        질문지 생성
+                      </Button>
                     </div>
                   )}
                 </div>
@@ -559,16 +2135,8 @@ export default function Page() {
               3 토큰이 차감됩니다. 새로운 질문을 생성하시겠습니까?
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="mb-4">
-            <Textarea
-              value={generationComment}
-              onChange={(e) => setGenerationComment(e.target.value)}
-              placeholder="질문 생성 시 참고할 코멘트를 입력하세요 (선택사항)"
-              rows={3}
-            />
-          </div>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setGenerationComment("")}>
+            <AlertDialogCancel>
               취소
             </AlertDialogCancel>
             <AlertDialogAction onClick={handleGenerateQuestions}>
@@ -584,19 +2152,11 @@ export default function Page() {
           <AlertDialogHeader>
             <AlertDialogTitle>답변지 생성</AlertDialogTitle>
             <AlertDialogDescription>
-              6 토큰이 차감됩니다. 새로운 답변을 생성하시겠습니까?
+              {selectedItems.size}개 질문 선택됨 - {(selectedItems.size / 30 * 6).toFixed(1)} 토큰이 차감됩니다. 답변을 생성하시겠습니까?
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="mb-4">
-            <Textarea
-              value={generationComment}
-              onChange={(e) => setGenerationComment(e.target.value)}
-              placeholder="답변 생성 시 참고할 코멘트를 입력하세요 (선택사항)"
-              rows={3}
-            />
-          </div>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setGenerationComment("")}>
+            <AlertDialogCancel>
               취소
             </AlertDialogCancel>
             <AlertDialogAction onClick={handleGenerateAnswers}>
@@ -605,6 +2165,184 @@ export default function Page() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Edit Q/A Dialog */}
+      <AlertDialog open={showEditQADialog} onOpenChange={setShowEditQADialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {selectedQAItem?.type === 'question' ? '질문' : '답변'} 수정
+            </AlertDialogTitle>
+          </AlertDialogHeader>
+          <div className="space-y-3">
+            <div>
+              <div className="text-sm font-medium text-gray-700 mb-1">현재 내용:</div>
+              <div className="text-sm text-gray-600 bg-gray-50 p-2 rounded border">
+                {selectedQAItem?.text}
+              </div>
+            </div>
+            <div>
+              <div className="text-sm font-medium text-gray-700 mb-1">수정 요청사항 (선택):</div>
+              <Textarea
+                value={qaOperationComment}
+                onChange={(e) => setQaOperationComment(e.target.value)}
+                placeholder="예: 더 구체적으로 작성해주세요, 경험 중심으로 변경해주세요 등"
+                rows={3}
+                className="text-sm"
+              />
+            </div>
+            <div className="text-xs text-gray-500">
+              0.2 토큰이 차감됩니다.
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setQaOperationComment("")}>
+              취소
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={submitEditQA}>
+              수정
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Regenerate Q/A Dialog */}
+      <AlertDialog open={showRegenerateQADialog} onOpenChange={setShowRegenerateQADialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {selectedQAItem?.type === 'question' ? '질문' : '답변'} 재생성
+            </AlertDialogTitle>
+          </AlertDialogHeader>
+          <div className="space-y-3">
+            <div>
+              <div className="text-sm font-medium text-gray-700 mb-1">현재 내용:</div>
+              <div className="text-sm text-gray-600 bg-gray-50 p-2 rounded border">
+                {selectedQAItem?.text}
+              </div>
+            </div>
+            <div className="text-xs text-gray-500">
+              0.2 토큰이 차감됩니다.
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>
+              취소
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={submitRegenerateQA}>
+              재생성
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Create Interview Dialog */}
+      <Dialog open={showCreateInterviewDialog} onOpenChange={setShowCreateInterviewDialog}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>새 면접 생성</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <label htmlFor="company-name" className="text-sm font-medium">회사명</label>
+              <Input
+                id="company-name"
+                value={newInterviewCompanyName}
+                onChange={(e) => setNewInterviewCompanyName(e.target.value)}
+                placeholder="회사명을 입력하세요"
+                disabled={isCreatingInterview}
+              />
+            </div>
+            <div className="grid gap-2">
+              <label htmlFor="position" className="text-sm font-medium">직무</label>
+              <Input
+                id="position"
+                value={newInterviewPosition}
+                onChange={(e) => setNewInterviewPosition(e.target.value)}
+                placeholder="직무를 입력하세요"
+                disabled={isCreatingInterview}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowCreateInterviewDialog(false)
+                setNewInterviewCompanyName("")
+                setNewInterviewPosition("")
+              }}
+              disabled={isCreatingInterview}
+            >
+              취소
+            </Button>
+            <Button onClick={handleCreateInterview} disabled={isCreatingInterview}>
+              {isCreatingInterview ? "생성 중..." : "생성"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Interview Dialog */}
+      <Dialog open={showDeleteDialog} onOpenChange={(open) => {
+        setShowDeleteDialog(open)
+        if (!open) {
+          setDeleteConfirmText("")
+        }
+      }}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="text-red-600">면접 삭제</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="text-sm text-gray-700">
+              <p className="mb-2">
+                <strong>{selectedInterview?.company_name} - {selectedInterview?.position}</strong> 면접을 삭제하시겠습니까?
+              </p>
+              <p className="text-red-600 font-medium mb-2">
+                모든 질문과 답변이 영구적으로 삭제되며 복구할 수 없습니다.
+              </p>
+              <p>
+                계속하려면 아래에 <strong className="text-red-600">삭제</strong>를 입력하세요.
+              </p>
+            </div>
+            <Input
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder="삭제"
+              disabled={isDeletingInterview}
+              autoComplete="off"
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowDeleteDialog(false)
+                setDeleteConfirmText("")
+              }}
+              disabled={isDeletingInterview}
+            >
+              취소
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteInterview}
+              disabled={isDeletingInterview || deleteConfirmText !== '삭제'}
+            >
+              {isDeletingInterview ? "삭제 중..." : "삭제"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
+  )
+}
+
+export default function Page() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center h-screen"><Loader className="animate-spin" /></div>}>
+      <InterviewPage />
+    </Suspense>
   )
 }

@@ -20,6 +20,46 @@ export interface InterviewQuestionData {
   cover_letter_competency: string[]
 }
 
+export interface InterviewAnswerData {
+  general_personality: string[]
+  cover_letter_personality: string[]
+  cover_letter_competency: string[]
+}
+
+export type ChangeType =
+  | 'questions_generated'      // Generate 30 questions (질문지 생성)
+  | 'answers_generated'        // Generate answers for selected questions (답변지 생성)
+  | 'question_regenerated'     // Regenerate a question
+  | 'question_edited'          // Edit a question by comment
+  | 'answer_regenerated'       // Regenerate an answer
+  | 'answer_edited'            // Edit an answer by comment
+
+export interface InterviewQA {
+  id: string
+  interview_id: string
+  name: string
+  questions_data: InterviewQuestionData
+  answers_data: InterviewAnswerData | null
+  is_default: boolean
+  type: ChangeType
+  created_at: string
+}
+
+export interface InterviewQAJob {
+  id: string
+  user_id: string
+  interview_id: string
+  type: ChangeType
+  status: 'queued' | 'processing' | 'completed' | 'failed'
+  input_data: Record<string, any>
+  interview_qas_id: string | null
+  error_message: string | null
+  created_at: string
+  started_at: string | null
+  completed_at: string | null
+}
+
+// Legacy types - kept for backward compatibility, to be removed
 export interface InterviewQuestion {
   id: string
   interview_id: string
@@ -28,12 +68,6 @@ export interface InterviewQuestion {
   comment: string | null
   created_at: string
   updated_at: string
-}
-
-export interface InterviewAnswerData {
-  general_personality: string[]
-  cover_letter_personality: string[]
-  cover_letter_competency: string[]
 }
 
 export interface InterviewAnswer {

@@ -144,10 +144,9 @@ export class JobManager {
     await this.updateJob(jobId, { status: 'processing' })
   }
 
-  async markJobAsCompleted(jobId: string, result: any): Promise<void> {
-    await this.updateJob(jobId, { 
-      status: 'completed', 
-      result,
+  async markJobAsCompleted(jobId: string, result?: any): Promise<void> {
+    await this.updateJob(jobId, {
+      status: 'completed',
       completed_at: new Date().toISOString()
     })
   }

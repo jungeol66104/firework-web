@@ -1,3 +1,13 @@
+/**
+ * @deprecated This component is deprecated and no longer used in the dashboard.
+ * Interview list functionality has been moved to /interview page with dropdown selector.
+ * Kept in codebase for reference only.
+ *
+ * Previous usage: Dashboard interview list section
+ * Replaced by: Interview dropdown in /interview page
+ * Date deprecated: 2025-10-08
+ */
+
 "use client"
 
 import { useState, useEffect } from "react"

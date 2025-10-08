@@ -21,18 +21,21 @@ export async function spendTokens(supabase: SupabaseClient, userId: string, amou
     console.log(`Insufficient tokens. Required: ${amount}, Available: ${tokens}`)
     return false
   }
-  
+
+  // Calculate precise token balance (supports decimals)
+  const newTokenBalance = tokens - amount
+
   const { error } = await supabase
     .from('profiles')
-    .update({ tokens: tokens - amount })
+    .update({ tokens: newTokenBalance })
     .eq('id', userId)
-  
+
   if (error) {
     console.error('Error spending tokens:', error)
     return false
   }
-  
-  console.log(`Successfully spent ${amount} tokens. Remaining: ${tokens - amount}`)
+
+  console.log(`Successfully spent ${amount} tokens. Remaining: ${newTokenBalance}`)
   return true
 }
 

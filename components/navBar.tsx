@@ -52,24 +52,26 @@ export const NavBar: React.FC<NavBarProps> = ({ children }) => {
   return (
     <div className="sticky top-0 z-10 w-full max-w-4xl mx-auto bg-white/40 backdrop-blur-sm">
       <div className="h-[60px] px-4 flex items-center justify-between">
-        <Link href="/dashboard" className="text-lg font-bold">
+        <Link href="/interview" className="text-lg font-bold">
           빅토리 포뮬러
         </Link>
       
       {!loading && user && profile && (
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" className="sm:px-3 px-0 sm:hover:bg-gray-100 hover:bg-transparent">
-            {/* Mobile: First letter with border */}
-            <div className="sm:hidden w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center">
-              <span className="text-sm font-medium text-gray-700">
-                {profile.name?.charAt(0) || 'U'}
+          <Link href="/dashboard">
+            <Button variant="ghost" size="sm" className="sm:px-3 px-0 sm:hover:bg-gray-100 hover:bg-transparent">
+              {/* Mobile: First letter with border */}
+              <div className="sm:hidden w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center">
+                <span className="text-sm font-medium text-gray-700">
+                  {profile.name?.charAt(0) || 'U'}
+                </span>
+              </div>
+              {/* Desktop: Full name */}
+              <span className="hidden sm:block text-sm font-medium text-gray-700">
+                {profile.name}님
               </span>
-            </div>
-            {/* Desktop: Full name */}
-            <span className="hidden sm:block text-sm font-medium text-gray-700">
-              {profile.name}님
-            </span>
-          </Button>
+            </Button>
+          </Link>
           <div className="flex items-center gap-2">
             <div className="relative">
               <Hexagon className="w-6 h-6 text-blue-600" />
@@ -77,7 +79,7 @@ export const NavBar: React.FC<NavBarProps> = ({ children }) => {
                 J
               </span>
             </div>
-            <span className="text-sm text-gray-600">{tokens.toLocaleString()}</span>
+            <span className="text-sm text-gray-600">{tokens.toLocaleString('ko-KR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
           </div>
           <Button 
             className="bg-blue-600 hover:bg-blue-700 text-white sm:px-3 sm:py-1 sm:h-8 sm:w-auto w-8 h-8 p-0 text-sm flex items-center justify-center gap-2"

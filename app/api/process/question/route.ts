@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifySignatureAppRouter } from '@upstash/qstash/nextjs'
-import { createClient } from '@/lib/supabase/clients/server'
+import { createAdminClient } from '@/lib/supabase/clients/admin'
 import { fetchInterviewByIdServer } from '@/lib/supabase/services/serverServices'
 import { spendTokens } from '@/lib/supabase/services/tokenService'
-import { createJobManager } from '@/lib/jobs/jobManager'
 import { GoogleGenAI, Type } from "@google/genai"
 
 async function handler(request: NextRequest) {
@@ -16,25 +15,37 @@ async function handler(request: NextRequest) {
     console.log('Environment check:')
     console.log('- QSTASH_CURRENT_SIGNING_KEY exists:', !!process.env.QSTASH_CURRENT_SIGNING_KEY)
     console.log('- QSTASH_NEXT_SIGNING_KEY exists:', !!process.env.QSTASH_NEXT_SIGNING_KEY)
-    
+
     const body = await request.json()
-    const { jobId, userId, interviewId, comment } = body
+    const { jobId, userId, interviewId } = body
 
     console.log('Processing question generation job:', jobId)
-    console.log('Job params:', { jobId, userId, interviewId, comment: !!comment })
+    console.log('Job params:', { jobId, userId, interviewId })
 
-    // Get supabase client and job manager
-    const supabase = await createClient()
-    const jobManager = createJobManager(supabase)
+    // Get supabase client
+    const supabase = createAdminClient()
 
     // Mark job as processing
-    await jobManager.markJobAsProcessing(jobId)
+    await supabase
+      .from('interview_qa_jobs')
+      .update({
+        status: 'processing',
+        started_at: new Date().toISOString()
+      })
+      .eq('id', jobId)
 
     try {
       // Fetch the interview data
       const interview = await fetchInterviewByIdServer(interviewId, userId)
       if (!interview) {
-        await jobManager.markJobAsFailed(jobId, 'Interview not found')
+        await supabase
+          .from('interview_qa_jobs')
+          .update({
+            status: 'failed',
+            error_message: 'Interview not found',
+            completed_at: new Date().toISOString()
+          })
+          .eq('id', jobId)
         return NextResponse.json({ error: 'Interview not found' }, { status: 404 })
       }
 
@@ -44,7 +55,7 @@ async function handler(request: NextRequest) {
       // TODO: Add regeneration support if needed
 
       // Prepare the prompt
-      const prompt = generatePrompt(interview, comment, previousQuestions)
+      const prompt = generatePrompt(interview, undefined, previousQuestions)
       console.log('Generated prompt for job', jobId, 'length:', prompt.length)
       
       // Generate with Gemini
@@ -86,24 +97,64 @@ async function handler(request: NextRequest) {
         
       } catch (error) {
         console.error('JSON parsing/validation failed for job', jobId, ':', error)
-        await jobManager.markJobAsFailed(jobId, 'Failed to generate valid JSON questions')
+        await supabase
+          .from('interview_qa_jobs')
+          .update({
+            status: 'failed',
+            error_message: 'Failed to generate valid JSON questions',
+            completed_at: new Date().toISOString()
+          })
+          .eq('id', jobId)
         return NextResponse.json({ error: 'JSON parsing failed' }, { status: 500 })
       }
 
-      // Save to database
-      const { data: savedQuestion, error: saveError } = await supabase
-        .from('interview_questions')
+      // Check if there's an existing default QA record
+      const { data: existingQAs } = await supabase
+        .from('interview_qas')
+        .select('id')
+        .eq('interview_id', interviewId)
+        .eq('is_default', true)
+
+      // If exists, set it to non-default
+      if (existingQAs && existingQAs.length > 0) {
+        await supabase
+          .from('interview_qas')
+          .update({ is_default: false })
+          .eq('interview_id', interviewId)
+          .eq('is_default', true)
+      }
+
+      // Save to interview_qas as new default with empty answers structure
+      // New questions = fresh empty answers (old answers don't map to new questions)
+      const emptyAnswers = {
+        general_personality: Array(10).fill(null),
+        cover_letter_personality: Array(10).fill(null),
+        cover_letter_competency: Array(10).fill(null)
+      }
+
+      const { data: savedQA, error: saveError } = await supabase
+        .from('interview_qas')
         .insert({
           interview_id: interviewId,
-          question_data: questionData,
-          comment: comment || null
+          name: '질문지 생성',
+          questions_data: questionData,
+          answers_data: emptyAnswers,
+          is_default: true,
+          type: 'questions_generated'
         })
         .select()
         .single()
 
       if (saveError) {
-        console.error('Error saving question for job', jobId, ':', saveError)
-        await jobManager.markJobAsFailed(jobId, 'Failed to save question to database')
+        console.error('Error saving QA for job', jobId, ':', saveError)
+        await supabase
+          .from('interview_qa_jobs')
+          .update({
+            status: 'failed',
+            error_message: 'Failed to save QA to database',
+            completed_at: new Date().toISOString()
+          })
+          .eq('id', jobId)
         return NextResponse.json({ error: 'Database save failed' }, { status: 500 })
       }
 
@@ -114,18 +165,28 @@ async function handler(request: NextRequest) {
         // Don't fail the job for token deduction failure, but log it
       }
 
-      // Mark job as completed with result
-      await jobManager.markJobAsCompleted(jobId, {
-        question_id: savedQuestion.id,
-        question_data: questionData
-      })
+      // Mark job as completed
+      await supabase
+        .from('interview_qa_jobs')
+        .update({
+          status: 'completed',
+          completed_at: new Date().toISOString()
+        })
+        .eq('id', jobId)
 
       console.log('Question generation job completed successfully:', jobId)
-      return NextResponse.json({ success: true, questionId: savedQuestion.id })
+      return NextResponse.json({ success: true, qaId: savedQA.id })
 
     } catch (error) {
       console.error('Error in question generation for job', jobId, ':', error)
-      await jobManager.markJobAsFailed(jobId, error instanceof Error ? error.message : 'Unknown error')
+      await supabase
+        .from('interview_qa_jobs')
+        .update({
+          status: 'failed',
+          error_message: error instanceof Error ? error.message : 'Unknown error',
+          completed_at: new Date().toISOString()
+        })
+        .eq('id', jobId)
       return NextResponse.json({ error: 'Generation failed' }, { status: 500 })
     }
 
@@ -165,9 +226,9 @@ ${comment || '기존 질문들을 개선해서 더 나은 질문으로 만들어
 }
 
 [질문 카테고리별 특성]
-- general_personality: 자기소개서와 무관
-- cover_letter_personality: 자기소개서와 관련
-- cover_letter_competency: 자기소개서와 관련
+- general_personality: 일반적인 인성 질문으로, 자기소개서/이력서/회사정보 등 사용자가 업로드한 정보를 절대 사용하지 말 것. 오직 일반적이고 보편적인 질문만 생성할 것.
+- cover_letter_personality: 자기소개서와 이력서를 기반으로 한 인성 질문
+- cover_letter_competency: 자기소개서와 이력서를 기반으로 한 직무 역량 질문
 
 [기본 원칙]
 - 첫 번째 질문은 반드시 '1분 자기소개 부탁드립니다.' 유지
@@ -222,9 +283,9 @@ ${interview.company_evaluation || ''}`
 }
 
 [질문 카테고리별 특성]
-- general_personality: 자기소개서와 무관
-- cover_letter_personality: 자기소개서와 관련
-- cover_letter_competency: 자기소개서와 관련
+- general_personality: 일반적인 인성 질문으로, 자기소개서/이력서/회사정보 등 사용자가 업로드한 정보를 절대 사용하지 말 것. 오직 일반적이고 보편적인 질문만 생성할 것.
+- cover_letter_personality: 자기소개서와 이력서를 기반으로 한 인성 질문
+- cover_letter_competency: 자기소개서와 이력서를 기반으로 한 직무 역량 질문
 
 [원칙]
 - 채점항목도 고려해야

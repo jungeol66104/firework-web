@@ -1,55 +1,74 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifySignatureAppRouter } from '@upstash/qstash/nextjs'
-import { createClient } from '@/lib/supabase/clients/server'
+import { createAdminClient } from '@/lib/supabase/clients/admin'
 import { fetchInterviewByIdServer, fetchInterviewQuestionsServer } from '@/lib/supabase/services/serverServices'
 import { spendTokens } from '@/lib/supabase/services/tokenService'
-import { createJobManager } from '@/lib/jobs/jobManager'
 import { GoogleGenAI, Type } from "@google/genai"
 
 async function handler(request: NextRequest) {
   try {
     const body = await request.json()
-    const { jobId, userId, interviewId, questionId, comment } = body
+    const { jobId, userId, interviewId, inputData } = body
+    const { selectedQuestions, comment } = inputData || {}
 
     console.log('Processing answer generation job:', jobId)
+    console.log('Selected questions:', selectedQuestions?.length || 0)
 
-    // Get supabase client and job manager
-    const supabase = await createClient()
-    const jobManager = createJobManager(supabase)
+    // Get supabase client
+    const supabase = createAdminClient()
 
     // Mark job as processing
-    await jobManager.markJobAsProcessing(jobId)
+    const { error: processingError } = await supabase
+      .from('interview_qa_jobs')
+      .update({ status: 'processing' })
+      .eq('id', jobId)
+
+    if (processingError) {
+      console.error('Failed to mark job as processing:', processingError)
+      throw new Error(`Failed to update job status: ${processingError.message}`)
+    }
+    console.log('Job marked as processing:', jobId)
 
     try {
       // Fetch the interview data
       const interview = await fetchInterviewByIdServer(interviewId, userId)
       if (!interview) {
-        await jobManager.markJobAsFailed(jobId, 'Interview not found')
+        await supabase
+          .from('interview_qa_jobs')
+          .update({ status: 'failed', error_message: 'Interview not found' })
+          .eq('id', jobId)
         return NextResponse.json({ error: 'Interview not found' }, { status: 404 })
       }
 
-      // Fetch the specific question
-      const questions = await fetchInterviewQuestionsServer(interviewId)
-      const question = questions.find(q => q.id === questionId)
-      if (!question) {
-        await jobManager.markJobAsFailed(jobId, 'Question not found')
-        return NextResponse.json({ error: 'Question not found' }, { status: 404 })
+      // Fetch the default QA record with questions
+      const { data: qa, error: qaError } = await supabase
+        .from('interview_qas')
+        .select('*')
+        .eq('interview_id', interviewId)
+        .eq('is_default', true)
+        .single()
+
+      if (qaError || !qa || !qa.questions_data) {
+        await supabase
+          .from('interview_qa_jobs')
+          .update({ status: 'failed', error_message: 'QA record not found' })
+          .eq('id', jobId)
+        return NextResponse.json({ error: 'QA record not found' }, { status: 404 })
       }
 
-      // Extract question data from the JSONB format
-      const questionData = question.question_data
-      if (!questionData) {
-        await jobManager.markJobAsFailed(jobId, 'Question data not found')
-        return NextResponse.json({ error: 'Question data not found' }, { status: 404 })
+      const questionData = qa.questions_data
+
+      // Validate selectedQuestions
+      if (!selectedQuestions || selectedQuestions.length === 0) {
+        await supabase
+          .from('interview_qa_jobs')
+          .update({ status: 'failed', error_message: 'No questions selected' })
+          .eq('id', jobId)
+        return NextResponse.json({ error: 'No questions selected' }, { status: 400 })
       }
 
-      // Check for regeneration mode by looking for existing answers
-      let previousAnswers = null
-      // For now, we'll implement initial generation only
-      // TODO: Add regeneration support if needed
-
-      // Prepare the prompt
-      const prompt = generatePrompt(interview, questionData, comment, previousAnswers)
+      // Prepare the prompt with only selected questions
+      const prompt = generatePrompt(interview, selectedQuestions, comment)
       console.log('Generated answer prompt for job', jobId, 'length:', prompt.length)
       
       // Generate with Gemini
@@ -57,10 +76,10 @@ async function handler(request: NextRequest) {
       console.log('Generated answer for job', jobId, 'length:', answer.length)
 
       // Parse and validate JSON response
-      let answerData: any = null
+      let llmAnswers: any = null
       try {
         let jsonString = answer.trim()
-        
+
         // Extract JSON from markdown code blocks if present
         if (jsonString.includes('```json')) {
           const jsonMatch = jsonString.match(/```json\s*\n([\s\S]*?)\n\s*```/)
@@ -73,65 +92,123 @@ async function handler(request: NextRequest) {
             jsonString = jsonMatch[1].trim()
           }
         }
-        
-        answerData = JSON.parse(jsonString)
-        
-        // Validate structure
-        const requiredKeys = ['general_personality', 'cover_letter_personality', 'cover_letter_competency']
-        const hasRequiredKeys = requiredKeys.every(key => {
-          const arr = answerData[key]
-          return Array.isArray(arr) && arr.length === 10 && arr.every(item => typeof item === 'string' && item.trim().length > 0)
-        })
-        
-        if (!hasRequiredKeys) {
-          throw new Error('Invalid JSON structure from Gemini API')
+
+        llmAnswers = JSON.parse(jsonString)
+
+        // Validate structure - expecting { answers: [{category, index, answer}] }
+        if (!llmAnswers.answers || !Array.isArray(llmAnswers.answers)) {
+          throw new Error('Invalid JSON structure: missing answers array')
         }
-        
-        console.log('JSON validation passed for job', jobId)
-        
+
+        // Validate each answer
+        for (const ans of llmAnswers.answers) {
+          if (!ans.category || !['general_personality', 'cover_letter_personality', 'cover_letter_competency'].includes(ans.category)) {
+            throw new Error(`Invalid category: ${ans.category}`)
+          }
+          if (typeof ans.index !== 'number' || ans.index < 0 || ans.index > 9) {
+            throw new Error(`Invalid index: ${ans.index}`)
+          }
+          if (typeof ans.answer !== 'string' || ans.answer.trim().length === 0) {
+            throw new Error('Invalid answer text')
+          }
+        }
+
+        console.log('JSON validation passed for job', jobId, '- received', llmAnswers.answers.length, 'answers')
+
       } catch (error) {
         console.error('JSON parsing/validation failed for job', jobId, ':', error)
-        await jobManager.markJobAsFailed(jobId, 'Failed to generate valid JSON answers')
+        await supabase
+          .from('interview_qa_jobs')
+          .update({ status: 'failed', error_message: 'Failed to generate valid JSON answers' })
+          .eq('id', jobId)
         return NextResponse.json({ error: 'JSON parsing failed' }, { status: 500 })
       }
 
-      // Save to database
-      const { data: savedAnswer, error: saveError } = await supabase
-        .from('interview_answers')
+      // Merge LLM answers into existing answers (preserve previous answers)
+      const existingAnswers = qa.answers_data || {
+        general_personality: Array(10).fill(null),
+        cover_letter_personality: Array(10).fill(null),
+        cover_letter_competency: Array(10).fill(null)
+      }
+
+      const answerData = {
+        general_personality: [...existingAnswers.general_personality],
+        cover_letter_personality: [...existingAnswers.cover_letter_personality],
+        cover_letter_competency: [...existingAnswers.cover_letter_competency]
+      }
+
+      llmAnswers.answers.forEach((ans: any) => {
+        answerData[ans.category as keyof typeof answerData][ans.index] = ans.answer
+      })
+
+      console.log('Merged answers for job', jobId)
+
+      // Update the QA record with answers
+      // Set current default to non-default
+      await supabase
+        .from('interview_qas')
+        .update({ is_default: false })
+        .eq('interview_id', interviewId)
+        .eq('is_default', true)
+
+      // Create new QA record with both questions and answers as new default
+      const { data: savedQA, error: saveError } = await supabase
+        .from('interview_qas')
         .insert({
           interview_id: interviewId,
-          question_id: questionId,
-          answer_data: answerData,
-          comment: comment || null
+          name: comment || '답변지 생성',
+          questions_data: qa.questions_data,
+          answers_data: answerData,
+          is_default: true,
+          type: 'answers_generated'
         })
         .select()
         .single()
 
       if (saveError) {
-        console.error('Error saving answer for job', jobId, ':', saveError)
-        await jobManager.markJobAsFailed(jobId, 'Failed to save answer to database')
+        console.error('Error saving QA for job', jobId, ':', saveError)
+        await supabase
+          .from('interview_qa_jobs')
+          .update({ status: 'failed', error_message: 'Failed to save QA to database' })
+          .eq('id', jobId)
         return NextResponse.json({ error: 'Database save failed' }, { status: 500 })
       }
 
-      // Deduct 6 tokens for answer generation (30 answers)
-      const tokenSpent = await spendTokens(supabase, userId, 6)
+      // Deduct tokens based on number of selected questions (6 tokens for all 30)
+      const tokenCost = (selectedQuestions.length / 30) * 6
+      const tokenSpent = await spendTokens(supabase, userId, tokenCost)
       if (!tokenSpent) {
         console.error('Failed to deduct tokens for job', jobId)
         // Don't fail the job for token deduction failure, but log it
       }
 
-      // Mark job as completed with result
-      await jobManager.markJobAsCompleted(jobId, {
-        answer_id: savedAnswer.id,
-        answer_data: answerData
-      })
+      // Mark job as completed
+      const { error: updateError } = await supabase
+        .from('interview_qa_jobs')
+        .update({
+          status: 'completed',
+          completed_at: new Date().toISOString()
+        })
+        .eq('id', jobId)
+
+      if (updateError) {
+        console.error('Failed to mark job as completed:', updateError)
+      } else {
+        console.log('Job marked as completed in database:', jobId)
+      }
 
       console.log('Answer generation job completed successfully:', jobId)
-      return NextResponse.json({ success: true, answerId: savedAnswer.id })
+      return NextResponse.json({ success: true, qaId: savedQA.id })
 
     } catch (error) {
       console.error('Error in answer generation for job', jobId, ':', error)
-      await jobManager.markJobAsFailed(jobId, error instanceof Error ? error.message : 'Unknown error')
+      await supabase
+        .from('interview_qa_jobs')
+        .update({
+          status: 'failed',
+          error_message: error instanceof Error ? error.message : 'Unknown error'
+        })
+        .eq('id', jobId)
       return NextResponse.json({ error: 'Generation failed' }, { status: 500 })
     }
 
@@ -141,131 +218,19 @@ async function handler(request: NextRequest) {
   }
 }
 
-function generatePrompt(interview: any, questionData: any, comment?: string, previousAnswers?: any): string {
-  if (previousAnswers) {
-    // Regeneration mode prompt
-    const prompt = `다음 기존 답변들을 참고하여 사용자 요청에 따라 답변을 생성해줘. 동일한 JSON 형식으로 정확히 30개를 유지해야 함.
+function generatePrompt(interview: any, selectedQuestions: Array<{category: string, index: number, text: string}>, comment?: string): string {
+  // Build question list with numbering - include actual index for LLM mapping
+  const questionsList = selectedQuestions.map((q, i) => {
+    const categoryLabel = q.category === 'general_personality' ? '일반 인성' :
+                         q.category === 'cover_letter_personality' ? '자소서 기반 인성' :
+                         '자소서 기반 역량'
+    return `${i + 1}. [${categoryLabel}] (category: "${q.category}", index: ${q.index}) ${q.text}`
+  }).join('\n')
 
-[기존 답변들]
-${JSON.stringify(previousAnswers, null, 2)}
+  const prompt = `당신은 면접 답변을 생성하는 전문가입니다.
+아래 선택된 질문들에 대해 답변을 생성해주세요.
 
-[사용자 요청]
-${comment || '기존 답변들을 개선해서 더 나은 답변으로 만들어줘'}
-
-[선택된 질문들]
-${JSON.stringify(questionData, null, 2)}
-
-[JSON 출력 형식]
-{
-  "general_personality": [
-    "1분 자기소개 답변",
-    "답변 2",
-    "답변 3",
-    "답변 4",
-    "답변 5",
-    "답변 6",
-    "답변 7",
-    "답변 8",
-    "답변 9",
-    "답변 10"
-  ],
-  "cover_letter_personality": [10개],
-  "cover_letter_competency": [10개]
-}
-
-[답변 카테고리별 특성]
-- general_personality: 자기소개서와 무관
-- cover_letter_personality: 자기소개서와 관련  
-- cover_letter_competency: 자기소개서와 관련
-
-[기본 원칙]
-- 채점항목도 고려해야
-- 두괄식이어야
-- 논리적이어야
-- 직관적이어야
-- 이 사람의 구체적인 경험을 잘 드러내야
-- 답변은 400자 이상으로 구성해야
-- 분량은 450-500자 사이로 맞춰야
-- 1분 자기소개는 "1분 자기소개 쓸 때 참고할 것"에 있는 좋은 사례의 구성과 흐름을 참고해야
-
-[1분 자기소개 쓸 때 참고할 좋은 예]
-안녕하십니까? 저는 "현장의 실제 필요에 맞춰 HR 솔루션을 최적화하는" 지원자 OOO입니다. 
-SK텔레콤 신입 교육 운영 시, 100명 이상 교육생의 개별 문의와 돌발적인 장비 문제를 실시간 해결하며 복잡한 일정을 완수했습니다. 이때 강사진, IT팀과의 즉각적인 공조와 사전에 여러 시나리오를 가정한 비상 계획 덕분에 교육 몰입도를 지킬 수 있었고, '치밀한 준비'와 '유연한 현장력'의 시너지를 통해 최적의 HR 지원이 가능함을 체감했습니다.
-씨드콥 노인 안전 교육 PM으로서는 어르신들의 시각적 인지 특성을 고려해 영상 자료의 글자 크기와 재생 속도까지 세밀하게 조절하는 등, 사용자의 미세한 필요에 맞춤 기획이 실제 교육 참여도와 안전 행동 변화로 이어짐을 경험했습니다.
-저는 이처럼 '사람' 중심의 섬세한 관찰과 분석으로 HR 문제를 해결하고, 구성원이 실질적으로 체감하는 지원을 실현하는 데 집중합니다. 저의 현장 중심 문제 해결력과 운영 경험은 기아 파워트레인이 급변하는 환경 속에서도 구성원 역량을 효과적으로 결집하고, 현장이 만족하는 HR 시스템을 만드는 데 기여할 것입니다. 기아의 성장에 실질적 힘을 보태는, 믿을 수 있는 HR 전문가가 되겠습니다.
-
-[데이터]
-<회사 정보>
-${interview.company_info || ''}
-
-<직무 정보>
-${interview.position || ''}
-${interview.job_posting || ''}
-
-<자기소개서>
-${interview.cover_letter || ''}
-
-<이력서>
-${interview.resume || ''}
-
-<예상 질문>
-${interview.expected_questions || ''}
-
-<채점 항목>
-${interview.company_evaluation || ''}
-
-<기타>
-${interview.other || ''}`
-
-    return prompt
-  } else {
-    // Initial generation mode prompt
-    const prompt = `다음 JSON 형식으로 정확히 30개 면접 답변을 생성해줘. 선택된 질문을 기준으로 해당 카테고리의 답변을 우선적으로 고려하되, 모든 카테고리의 답변을 생성해야 함.
-
-[선택된 질문들]
-${JSON.stringify(questionData, null, 2)}
-
-[JSON 출력 형식]
-{
-  "general_personality": [
-    "1분 자기소개 답변",
-    "답변 2",
-    "답변 3",
-    "답변 4",
-    "답변 5",
-    "답변 6",
-    "답변 7",
-    "답변 8",
-    "답변 9",
-    "답변 10"
-  ],
-  "cover_letter_personality": [10개],
-  "cover_letter_competency": [10개]
-}
-
-[답변 카테고리별 특성]
-- general_personality: 자기소개서와 무관
-- cover_letter_personality: 자기소개서와 관련
-- cover_letter_competency: 자기소개서와 관련
-
-[기본 원칙]
-- 채점항목도 고려해야
-- 두괄식이어야
-- 논리적이어야
-- 직관적이어야
-- 이 사람의 구체적인 경험을 잘 드러내야
-- 이 사람의 경험이 없는 건 지어내지 말고, 경험은 있는데 디테일이 부족한 경우는 디테일을 채워줘도 됨
-- 답변은 400자 이상으로 구성해야
-- 분량은 450-500자 사이로 맞춰야
-- 1분 자기소개는 "1분 자기소개 쓸 때 참고할 것"에 있는 좋은 사례의 구성과 흐름을 참고해서 쓰도록 해야. 하지만 해당 사례의 내용은 절대 섞지 말 것.
-
-[1분 자기소개 쓸 때 참고할 좋은 예]
-안녕하십니까? 저는 "현장의 실제 필요에 맞춰 HR 솔루션을 최적화하는" 지원자 OOO입니다. 
-SK텔레콤 신입 교육 운영 시, 100명 이상 교육생의 개별 문의와 돌발적인 장비 문제를 실시간 해결하며 복잡한 일정을 완수했습니다. 이때 강사진, IT팀과의 즉각적인 공조와 사전에 여러 시나리오를 가정한 비상 계획 덕분에 교육 몰입도를 지킬 수 있었고, '치밀한 준비'와 '유연한 현장력'의 시너지를 통해 최적의 HR 지원이 가능함을 체감했습니다.
-씨드콥 노인 안전 교육 PM으로서는 어르신들의 시각적 인지 특성을 고려해 영상 자료의 글자 크기와 재생 속도까지 세밀하게 조절하는 등, 사용자의 미세한 필요에 맞춤 기획이 실제 교육 참여도와 안전 행동 변화로 이어짐을 경험했습니다.
-저는 이처럼 '사람' 중심의 섬세한 관찰과 분석으로 HR 문제를 해결하고, 구성원이 실질적으로 체감하는 지원을 실현하는 데 집중합니다. 저의 현장 중심 문제 해결력과 운영 경험은 기아 파워트레인이 급변하는 환경 속에서도 구성원 역량을 효과적으로 결집하고, 현장이 만족하는 HR 시스템을 만드는 데 기여할 것입니다. 기아의 성장에 실질적 힘을 보태는, 믿을 수 있는 HR 전문가가 되겠습니다.
-
-[데이터]
+[사용자 정보]
 <회사 정보>
 ${interview.company_info || ''}
 
@@ -288,11 +253,46 @@ ${interview.company_evaluation || ''}
 <기타>
 ${interview.other || ''}
 
-[개선 요청]
-${comment || '없음'}`
+[답변할 질문 목록] (총 ${selectedQuestions.length}개)
+${questionsList}
 
-    return prompt
-  }
+[답변 요구사항]
+- 각 답변은 450-500자
+- 두괄식 구성 (결론을 먼저 말하고 근거를 설명)
+- 구체적 경험과 수치 포함
+- 논리적이고 직관적인 흐름
+- 채점 항목을 고려하여 작성
+- 경험이 없는 내용은 지어내지 말고, 디테일이 부족한 경우만 보완
+
+[1분 자기소개 작성 시 참고 (구조만 참고, 내용은 절대 복사 금지)]
+안녕하십니까? 저는 "현장의 실제 필요에 맞춰 HR 솔루션을 최적화하는" 지원자 OOO입니다.
+SK텔레콤 신입 교육 운영 시, 100명 이상 교육생의 개별 문의와 돌발적인 장비 문제를 실시간 해결하며 복잡한 일정을 완수했습니다. 이때 강사진, IT팀과의 즉각적인 공조와 사전에 여러 시나리오를 가정한 비상 계획 덕분에 교육 몰입도를 지킬 수 있었고, '치밀한 준비'와 '유연한 현장력'의 시너지를 통해 최적의 HR 지원이 가능함을 체감했습니다.
+씨드콥 노인 안전 교육 PM으로서는 어르신들의 시각적 인지 특성을 고려해 영상 자료의 글자 크기와 재생 속도까지 세밀하게 조절하는 등, 사용자의 미세한 필요에 맞춤 기획이 실제 교육 참여도와 안전 행동 변화로 이어짐을 경험했습니다.
+저는 이처럼 '사람' 중심의 섬세한 관찰과 분석으로 HR 문제를 해결하고, 구성원이 실질적으로 체감하는 지원을 실현하는 데 집중합니다. 저의 현장 중심 문제 해결력과 운영 경험은 기아 파워트레인이 급변하는 환경 속에서도 구성원 역량을 효과적으로 결집하고, 현장이 만족하는 HR 시스템을 만드는 데 기여할 것입니다. 기아의 성장에 실질적 힘을 보태는, 믿을 수 있는 HR 전문가가 되겠습니다.
+
+[사용자 추가 요청]
+${comment || '없음'}
+
+[출력 형식]
+각 질문에 대해 category, index, answer를 포함한 JSON 배열로 반환해주세요.
+**중요**: index는 질문 목록에 표시된 "(category: "xxx", index: N)" 부분의 N 값을 정확히 사용해야 합니다.
+
+예시:
+만약 질문이 "1. [일반 인성] (category: "general_personality", index: 2) 질문내용" 이라면:
+{
+  "answers": [
+    {
+      "category": "general_personality",
+      "index": 2,
+      "answer": "안녕하십니까? 저는..."
+    }
+  ]
+}
+
+위 질문 목록의 순서대로 정확히 ${selectedQuestions.length}개의 답변을 생성해주세요.
+각 답변의 category와 index는 질문 목록에 명시된 값을 그대로 사용하세요.`
+
+  return prompt
 }
 
 async function generateAnswerWithGemini(prompt: string): Promise<string> {
@@ -320,26 +320,27 @@ async function generateAnswerWithGemini(prompt: string): Promise<string> {
       const responseSchema = {
         type: Type.OBJECT,
         properties: {
-          general_personality: {
+          answers: {
             type: Type.ARRAY,
-            items: { type: Type.STRING },
-            minItems: 10,
-            maxItems: 10
-          },
-          cover_letter_personality: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING },
-            minItems: 10,
-            maxItems: 10
-          },
-          cover_letter_competency: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING },
-            minItems: 10,
-            maxItems: 10
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                category: {
+                  type: Type.STRING,
+                  enum: ["general_personality", "cover_letter_personality", "cover_letter_competency"]
+                },
+                index: {
+                  type: Type.NUMBER
+                },
+                answer: {
+                  type: Type.STRING
+                }
+              },
+              required: ["category", "index", "answer"]
+            }
           }
         },
-        required: ["general_personality", "cover_letter_personality", "cover_letter_competency"]
+        required: ["answers"]
       }
       
       const response = await ai.models.generateContent({

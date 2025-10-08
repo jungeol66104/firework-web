@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/clients/server'
-import { createJobManager } from '@/lib/jobs/jobManager'
 
 export async function GET(
   request: NextRequest,
@@ -26,11 +25,14 @@ export async function GET(
       )
     }
 
-    // Get job details
-    const jobManager = createJobManager(supabase)
-    const job = await jobManager.getJob(jobId)
+    // Get job details from new interview_qa_jobs table
+    const { data: job, error: jobError } = await supabase
+      .from('interview_qa_jobs')
+      .select('*')
+      .eq('id', jobId)
+      .single()
 
-    if (!job) {
+    if (jobError || !job) {
       return NextResponse.json(
         { error: 'Job not found' },
         { status: 404 }
@@ -48,15 +50,15 @@ export async function GET(
     return NextResponse.json({
       job: {
         id: job.id,
+        user_id: job.user_id,
+        interview_id: job.interview_id,
         type: job.type,
         status: job.status,
-        result: job.result,
+        input_data: job.input_data,
         error_message: job.error_message,
         created_at: job.created_at,
-        completed_at: job.completed_at,
-        interview_id: job.interview_id,
-        question_id: job.question_id,
-        comment: job.comment
+        started_at: job.started_at,
+        completed_at: job.completed_at
       }
     })
 
