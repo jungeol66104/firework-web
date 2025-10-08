@@ -2341,7 +2341,7 @@ function InterviewPage() {
 
 export default function Page() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center h-screen"><Loader className="animate-spin" /></div>}>
+    <Suspense fallback={<div className="flex items-center justify-center h-screen"><Loader className="h-4 w-4 animate-spin" /></div>}>
       <InterviewPage />
     </Suspense>
   )

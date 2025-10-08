@@ -275,7 +275,7 @@ function PaymentCheckoutContent() {
                 {/* Payment Methods Widget */}
                 {!widgets ? (
                   <div className="mb-4 p-8 text-center">
-                    <Loader className="mx-auto h-6 w-6 animate-spin text-blue-600 mb-2" />
+                    <Loader className="mx-auto h-4 w-4 animate-spin text-blue-600 mb-2" />
                     <p className="text-sm text-gray-600">결제 수단을 불러오는 중...</p>
                   </div>
                 ) : (
