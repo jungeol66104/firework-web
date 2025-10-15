@@ -1,7 +1,7 @@
 import { createClient } from '../clients/server'
-import { fetchInterviews, fetchInterviewById, createProfile, fetchProfileById, updateProfile, fetchUserInterviews, getCurrentUserInterviews, deleteInterview, searchInterviewsByCandidateName, getCurrentUser, checkInterviewOwnership, updateInterview, getCurrentUserProfile, updateCurrentUserProfile, deleteCurrentUserAccount, fetchInterviewQuestions } from './services'
+import { fetchInterviews, fetchInterviewById, createProfile, fetchProfileById, updateProfile, fetchUserInterviews, getCurrentUserInterviews, deleteInterview, searchInterviewsByCandidateName, getCurrentUser, checkInterviewOwnership, updateInterview, getCurrentUserProfile, updateCurrentUserProfile, deleteCurrentUserAccount, fetchInterviewQuestions, createReport, fetchCurrentUserReports, fetchReportById, updateReport, fetchAllReports, refundReportItem } from './services'
 import { getUserTokens } from './tokenService'
-import { FetchInterviewsParams, FetchInterviewsResult, CreateProfileParams, Profile, Interview } from '@/lib/types'
+import { FetchInterviewsParams, FetchInterviewsResult, CreateProfileParams, Profile, Interview, CreateReportParams, Report, UpdateReportParams } from '@/lib/types'
 
 export async function fetchInterviewsServer(params: FetchInterviewsParams = {}): Promise<FetchInterviewsResult> {
   const supabase = await createClient()
@@ -133,4 +133,40 @@ export async function getUserTokensServer(): Promise<number> {
   }
   
   return getUserTokens(supabase, user.id)
+}
+
+// Report server services
+export async function createReportServer(params: CreateReportParams): Promise<Report> {
+  const supabase = await createClient()
+  return createReport(supabase, params)
+}
+
+export async function fetchCurrentUserReportsServer(): Promise<Report[]> {
+  const supabase = await createClient()
+  return fetchCurrentUserReports(supabase)
+}
+
+export async function fetchReportByIdServer(reportId: string): Promise<Report | null> {
+  const supabase = await createClient()
+  return fetchReportById(supabase, reportId)
+}
+
+export async function updateReportServer(reportId: string, updates: UpdateReportParams): Promise<Report> {
+  const supabase = await createClient()
+  return updateReport(supabase, reportId, updates)
+}
+
+export async function fetchAllReportsServer(status?: string): Promise<Report[]> {
+  const supabase = await createClient()
+  return fetchAllReports(supabase, status)
+}
+
+export async function refundReportItemServer(
+  reportId: string,
+  itemType: 'question' | 'answer',
+  category: string,
+  index: number
+): Promise<Report> {
+  const supabase = await createClient()
+  return refundReportItem(supabase, reportId, itemType, category, index)
 }

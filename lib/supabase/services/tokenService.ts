@@ -45,22 +45,54 @@ export async function addTokens(supabase: SupabaseClient, userId: string, amount
     .select('tokens')
     .eq('id', userId)
     .single()
-    
+
   if (fetchError) {
     console.error('Error fetching current tokens for addition:', fetchError)
     return
   }
-  
+
   const currentTokens = data?.tokens || 0
   const { error: updateError } = await supabase
     .from('profiles')
     .update({ tokens: currentTokens + amount })
     .eq('id', userId)
-    
+
   if (updateError) {
     console.error('Error adding tokens:', updateError)
     return
   }
-  
+
   console.log(`Successfully added ${amount} tokens. New balance: ${currentTokens + amount}`)
+}
+
+export async function checkTokenBalance(supabase: SupabaseClient, userId: string, requiredAmount: number): Promise<boolean> {
+  const tokens = await getUserTokens(supabase, userId)
+  return tokens >= requiredAmount
+}
+
+export async function refundTokens(supabase: SupabaseClient, userId: string, amount: number): Promise<boolean> {
+  const { data, error: fetchError } = await supabase
+    .from('profiles')
+    .select('tokens')
+    .eq('id', userId)
+    .single()
+
+  if (fetchError) {
+    console.error('Error fetching current tokens for refund:', fetchError)
+    return false
+  }
+
+  const currentTokens = data?.tokens || 0
+  const { error: updateError } = await supabase
+    .from('profiles')
+    .update({ tokens: currentTokens + amount })
+    .eq('id', userId)
+
+  if (updateError) {
+    console.error('Error refunding tokens:', updateError)
+    return false
+  }
+
+  console.log(`Successfully refunded ${amount} tokens. New balance: ${currentTokens + amount}`)
+  return true
 }

@@ -3,28 +3,34 @@
 import { useState, useEffect, useRef } from 'react';
 import { Loader, Search, X, Copy } from 'lucide-react';
 import { createClient } from '@/lib/supabase/clients/client';
-import { fetchAllUsers } from '@/lib/admin/adminServices';
-import { Profile } from '@/lib/types';
-import { useRouter } from 'next/navigation';
+import { fetchAllPayments } from '@/lib/admin/adminServices';
+import { useSearchParams } from 'next/navigation';
 
-export default function AdminUsersPage() {
-  const router = useRouter();
-  const [data, setData] = useState<Profile[]>([]);
+export default function AdminPaymentsPage() {
+  const searchParams = useSearchParams();
+  const userIdFilter = searchParams.get('user_id');
+
+  const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(100);
-  const [nameSearchInput, setNameSearchInput] = useState('');
-  const [showNameDropdown, setShowNameDropdown] = useState(false);
+  const [statusSearchInput, setStatusSearchInput] = useState('');
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const nameDropdownRef = useRef<HTMLDivElement>(null);
+  const statusDropdownRef = useRef<HTMLDivElement>(null);
 
   const [columnWidths, setColumnWidths] = useState({
     index: 50,
     id: 100,
-    name: 150,
-    email: 200,
+    userName: 100,
+    userId: 120,
+    amount: 80,
+    tokens: 70,
+    orderid: 120,
+    method: 100,
+    status: 90,
     created: 120,
-    actions: 150,
+    completed: 120,
   });
 
   const resizingColumn = useRef<string | null>(null);
@@ -32,13 +38,13 @@ export default function AdminUsersPage() {
   const startWidth = useRef(0);
 
   useEffect(() => {
-    fetchUsers();
-  }, []);
+    fetchPayments();
+  }, [userIdFilter]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (nameDropdownRef.current && !nameDropdownRef.current.contains(event.target as Node)) {
-        setShowNameDropdown(false);
+      if (statusDropdownRef.current && !statusDropdownRef.current.contains(event.target as Node)) {
+        setShowStatusDropdown(false);
       }
     };
 
@@ -46,14 +52,17 @@ export default function AdminUsersPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const fetchUsers = async () => {
+  const fetchPayments = async () => {
     setLoading(true);
     try {
       const supabase = createClient();
-      const result = await fetchAllUsers(supabase, { limit: 1000 });
-      setData(result.users);
+      const result = await fetchAllPayments(supabase, {
+        limit: 1000,
+        user_id: userIdFilter || undefined
+      });
+      setData(result.payments);
     } catch (error) {
-      console.error('Error fetching users:', error);
+      console.error('Error fetching payments:', error);
       setData([]);
     } finally {
       setLoading(false);
@@ -94,27 +103,32 @@ export default function AdminUsersPage() {
     document.removeEventListener('mouseup', handleMouseUp);
   };
 
-  const handleRowClick = (userId: string) => {
-    router.push(`/admin/users/${userId}`);
+  const getStatusLabel = (status: string) => {
+    const statusMap: Record<string, string> = {
+      'pending': '대기중',
+      'completed': '완료',
+      'failed': '실패',
+      'cancelled': '취소'
+    };
+    return statusMap[status] || status;
   };
 
-  const handleInterviewsClick = (e: React.MouseEvent, userId: string) => {
-    e.stopPropagation();
-    router.push(`/admin/interviews?user_id=${userId}`);
+  const getStatusColor = (status: string) => {
+    const colorMap: Record<string, string> = {
+      'pending': 'bg-yellow-100 text-yellow-800',
+      'completed': 'bg-green-100 text-green-800',
+      'failed': 'bg-red-100 text-red-800',
+      'cancelled': 'bg-gray-100 text-gray-800'
+    };
+    return colorMap[status] || 'bg-gray-100 text-gray-800';
   };
 
-  const handlePaymentsClick = (e: React.MouseEvent, userId: string) => {
-    e.stopPropagation();
-    router.push(`/admin/payments?user_id=${userId}`);
-  };
-
-  // Filter data by name search
-  const filteredData = data.filter(user => {
-    if (!nameSearchInput) return true;
-    const userName = user.name?.toLowerCase() || '';
-    const userEmail = user.email?.toLowerCase() || '';
-    const search = nameSearchInput.toLowerCase();
-    return userName.includes(search) || userEmail.includes(search);
+  // Filter data by status search
+  const filteredData = data.filter(payment => {
+    if (!statusSearchInput) return true;
+    const status = payment.status?.toLowerCase() || '';
+    const search = statusSearchInput.toLowerCase();
+    return status.includes(search);
   });
 
   // Paginate filtered data
@@ -127,7 +141,7 @@ export default function AdminUsersPage() {
     return (
       <div className="h-full flex-1 bg-white">
         <div className="max-w-4xl mx-auto pb-4">
-          <h1 className="text-2xl font-bold mb-4">사용자</h1>
+          <h1 className="text-2xl font-bold mb-4">결제</h1>
           <div className="flex items-center justify-center py-20">
             <Loader className="animate-spin w-4 h-4" />
           </div>
@@ -140,7 +154,7 @@ export default function AdminUsersPage() {
     <div className="bg-white h-full flex flex-col overflow-hidden" style={{ height: 'calc(100vh - 60px)' }}>
       <div className="max-w-4xl mx-auto pb-4 w-full flex-1 flex flex-col overflow-hidden">
         <div className="mb-4">
-          <h1 className="text-2xl font-bold">사용자</h1>
+          <h1 className="text-2xl font-bold">결제</h1>
         </div>
 
         {/* Table */}
@@ -162,30 +176,72 @@ export default function AdminUsersPage() {
                       onMouseDown={(e) => handleMouseDown(e, 'id')}
                     />
                   </th>
-                  <th className="px-3 py-2 text-left text-xs border-r relative" style={{ width: columnWidths.name, minWidth: columnWidths.name }}>
+                  <th className="px-3 py-2 text-left text-xs border-r relative" style={{ width: columnWidths.userName, minWidth: columnWidths.userName }}>
+                    사용자
+                    <div
+                      className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-blue-500"
+                      onMouseDown={(e) => handleMouseDown(e, 'userName')}
+                    />
+                  </th>
+                  <th className="px-3 py-2 text-left text-xs border-r relative" style={{ width: columnWidths.userId, minWidth: columnWidths.userId }}>
+                    사용자 ID
+                    <div
+                      className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-blue-500"
+                      onMouseDown={(e) => handleMouseDown(e, 'userId')}
+                    />
+                  </th>
+                  <th className="px-3 py-2 text-left text-xs border-r relative" style={{ width: columnWidths.amount, minWidth: columnWidths.amount }}>
+                    금액
+                    <div
+                      className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-blue-500"
+                      onMouseDown={(e) => handleMouseDown(e, 'amount')}
+                    />
+                  </th>
+                  <th className="px-3 py-2 text-left text-xs border-r relative" style={{ width: columnWidths.tokens, minWidth: columnWidths.tokens }}>
+                    토큰
+                    <div
+                      className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-blue-500"
+                      onMouseDown={(e) => handleMouseDown(e, 'tokens')}
+                    />
+                  </th>
+                  <th className="px-3 py-2 text-left text-xs border-r relative" style={{ width: columnWidths.orderid, minWidth: columnWidths.orderid }}>
+                    주문 ID
+                    <div
+                      className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-blue-500"
+                      onMouseDown={(e) => handleMouseDown(e, 'orderid')}
+                    />
+                  </th>
+                  <th className="px-3 py-2 text-left text-xs border-r relative" style={{ width: columnWidths.method, minWidth: columnWidths.method }}>
+                    결제 수단
+                    <div
+                      className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-blue-500"
+                      onMouseDown={(e) => handleMouseDown(e, 'method')}
+                    />
+                  </th>
+                  <th className="px-3 py-2 text-left text-xs border-r relative" style={{ width: columnWidths.status, minWidth: columnWidths.status }}>
                     <div className="flex items-center justify-between">
-                      <span>이름</span>
-                      <div className="relative" ref={nameDropdownRef}>
+                      <span>상태</span>
+                      <div className="relative" ref={statusDropdownRef}>
                         <button
-                          onClick={() => setShowNameDropdown(!showNameDropdown)}
+                          onClick={() => setShowStatusDropdown(!showStatusDropdown)}
                           className="p-1 hover:bg-gray-200 cursor-pointer"
                         >
-                          <Search className={`w-3 h-3 ${nameSearchInput ? 'text-blue-600' : 'text-gray-400'}`} />
+                          <Search className={`w-3 h-3 ${statusSearchInput ? 'text-blue-600' : 'text-gray-400'}`} />
                         </button>
-                        {showNameDropdown && (
+                        {showStatusDropdown && (
                           <div className="absolute top-full left-0 mt-1 bg-white border shadow-lg p-1" style={{ minWidth: '200px', zIndex: 9999 }}>
                             <div className="flex items-center gap-1">
                               <input
                                 type="text"
-                                value={nameSearchInput}
-                                onChange={(e) => { setNameSearchInput(e.target.value); setPage(1); }}
-                                placeholder="이름 또는 이메일"
+                                value={statusSearchInput}
+                                onChange={(e) => { setStatusSearchInput(e.target.value); setPage(1); }}
+                                placeholder="상태"
                                 className="flex-1 px-2 py-1 text-xs outline-none"
                                 autoFocus
                               />
-                              {nameSearchInput && (
+                              {statusSearchInput && (
                                 <button
-                                  onClick={() => { setNameSearchInput(''); setPage(1); }}
+                                  onClick={() => { setStatusSearchInput(''); setPage(1); }}
                                   className="flex-shrink-0 cursor-pointer mr-1"
                                 >
                                   <X className="w-3 h-3 text-gray-400" />
@@ -198,45 +254,37 @@ export default function AdminUsersPage() {
                     </div>
                     <div
                       className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-blue-500"
-                      onMouseDown={(e) => handleMouseDown(e, 'name')}
-                    />
-                  </th>
-                  <th className="px-3 py-2 text-left text-xs border-r relative" style={{ width: columnWidths.email, minWidth: columnWidths.email }}>
-                    이메일
-                    <div
-                      className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-blue-500"
-                      onMouseDown={(e) => handleMouseDown(e, 'email')}
+                      onMouseDown={(e) => handleMouseDown(e, 'status')}
                     />
                   </th>
                   <th className="px-3 py-2 text-left text-xs border-r relative" style={{ width: columnWidths.created, minWidth: columnWidths.created }}>
-                    가입일
+                    생성일
                     <div
                       className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-blue-500"
                       onMouseDown={(e) => handleMouseDown(e, 'created')}
                     />
                   </th>
-                  <th className="px-3 py-2 text-left text-xs" style={{ width: columnWidths.actions, minWidth: columnWidths.actions }}>
-                    바로가기
+                  <th className="px-3 py-2 text-left text-xs" style={{ width: columnWidths.completed, minWidth: columnWidths.completed }}>
+                    완료일
                   </th>
                 </tr>
               </thead>
               <tbody>
-                {paginatedData.map((user, index) => (
+                {paginatedData.map((payment, index) => (
                   <tr
-                    key={user.id}
-                    className="hover:bg-gray-50 border-b cursor-pointer"
-                    onClick={() => handleRowClick(user.id)}
+                    key={payment.id}
+                    className="hover:bg-gray-50 border-b"
                   >
                     <td className="px-3 py-2 text-xs text-gray-500 border-r text-center" style={{ width: columnWidths.index, minWidth: columnWidths.index }}>
                       {start + index + 1}
                     </td>
-                    <td className="px-3 py-2 text-xs font-mono text-gray-500 overflow-hidden border-r" title={user.id} style={{ width: columnWidths.id, minWidth: columnWidths.id }}>
+                    <td className="px-3 py-2 text-xs font-mono text-gray-500 overflow-hidden border-r" title={payment.id} style={{ width: columnWidths.id, minWidth: columnWidths.id }}>
                       <div className="flex items-center justify-between gap-1">
-                        <div className="truncate">{user.id.slice(0, 8)}</div>
+                        <div className="truncate">{payment.id.slice(0, 8)}</div>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleCopyId(user.id);
+                            handleCopyId(payment.id);
                           }}
                           className="flex-shrink-0 p-1 hover:bg-gray-200 cursor-pointer"
                         >
@@ -244,35 +292,34 @@ export default function AdminUsersPage() {
                         </button>
                       </div>
                     </td>
-                    <td className="px-3 py-2 text-xs overflow-hidden border-r" style={{ width: columnWidths.name, minWidth: columnWidths.name }}>
-                      <div className="flex items-center gap-2">
-                        <div className="truncate">{user.name || '-'}</div>
-                        {user.is_admin && (
-                          <span className="px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-800">관리자</span>
-                        )}
-                      </div>
+                    <td className="px-3 py-2 text-xs overflow-hidden border-r" title={payment.user?.name || ''} style={{ width: columnWidths.userName, minWidth: columnWidths.userName }}>
+                      <div className="truncate">{payment.user?.name || '-'}</div>
                     </td>
-                    <td className="px-3 py-2 text-xs overflow-hidden border-r" title={user.email || ''} style={{ width: columnWidths.email, minWidth: columnWidths.email }}>
-                      <div className="truncate">{user.email || '-'}</div>
+                    <td className="px-3 py-2 text-xs font-mono text-gray-500 border-r" title={payment.user_id || ''} style={{ width: columnWidths.userId, minWidth: columnWidths.userId }}>
+                      {payment.user_id?.slice(0, 8) || '-'}
+                    </td>
+                    <td className="px-3 py-2 text-xs border-r text-right" style={{ width: columnWidths.amount, minWidth: columnWidths.amount }}>
+                      {payment.amount?.toLocaleString() || '-'}원
+                    </td>
+                    <td className="px-3 py-2 text-xs border-r text-right" style={{ width: columnWidths.tokens, minWidth: columnWidths.tokens }}>
+                      {payment.tokens || '-'}
+                    </td>
+                    <td className="px-3 py-2 text-xs font-mono text-gray-500 overflow-hidden border-r" title={payment.order_id || ''} style={{ width: columnWidths.orderid, minWidth: columnWidths.orderid }}>
+                      <div className="truncate">{payment.order_id || '-'}</div>
+                    </td>
+                    <td className="px-3 py-2 text-xs overflow-hidden border-r" title={payment.payment_method || ''} style={{ width: columnWidths.method, minWidth: columnWidths.method }}>
+                      <div className="truncate">{payment.payment_method || '-'}</div>
+                    </td>
+                    <td className="px-3 py-2 text-xs border-r" style={{ width: columnWidths.status, minWidth: columnWidths.status }}>
+                      <span className={`px-2 py-0.5 rounded text-xs ${getStatusColor(payment.status)}`}>
+                        {getStatusLabel(payment.status)}
+                      </span>
                     </td>
                     <td className="px-3 py-2 text-xs border-r" style={{ width: columnWidths.created, minWidth: columnWidths.created }}>
-                      {new Date(user.created_at).toLocaleDateString('ko-KR')}
+                      {new Date(payment.created_at).toLocaleDateString('ko-KR')}
                     </td>
-                    <td className="px-3 py-2 text-xs" style={{ width: columnWidths.actions, minWidth: columnWidths.actions }}>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={(e) => handleInterviewsClick(e, user.id)}
-                          className="px-2 py-1 text-xs border hover:bg-gray-50 cursor-pointer"
-                        >
-                          면접
-                        </button>
-                        <button
-                          onClick={(e) => handlePaymentsClick(e, user.id)}
-                          className="px-2 py-1 text-xs border hover:bg-gray-50 cursor-pointer"
-                        >
-                          결제
-                        </button>
-                      </div>
+                    <td className="px-3 py-2 text-xs" style={{ width: columnWidths.completed, minWidth: columnWidths.completed }}>
+                      {payment.completed_at ? new Date(payment.completed_at).toLocaleDateString('ko-KR') : '-'}
                     </td>
                   </tr>
                 ))}

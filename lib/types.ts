@@ -121,3 +121,45 @@ export interface CreateInterviewParams {
   other?: string
   user_id: string
 }
+
+// Report types
+export type ReportStatus = 'pending' | 'in_review' | 'resolved' | 'rejected'
+
+export interface ReportItem {
+  category: string
+  index: number
+  refunded?: boolean
+  refund_amount?: number
+  refunded_at?: string
+}
+
+export interface ReportItems {
+  questions: ReportItem[]
+  answers: ReportItem[]
+}
+
+export interface Report {
+  id: string
+  user_id: string
+  interview_id: string
+  interview_qas_id: string
+  items: ReportItems
+  description: string
+  status: ReportStatus
+  admin_response: string | null
+  resolved_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateReportParams {
+  interview_qas_id: string
+  selectedQuestions: string[]
+  selectedAnswers: string[]
+  description: string
+}
+
+export interface UpdateReportParams {
+  status?: ReportStatus
+  admin_response?: string
+}

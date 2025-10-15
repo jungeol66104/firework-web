@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifySignatureAppRouter } from '@upstash/qstash/nextjs'
 import { createAdminClient } from '@/lib/supabase/clients/admin'
 import { fetchInterviewByIdServer } from '@/lib/supabase/services/serverServices'
-import { spendTokens } from '@/lib/supabase/services/tokenService'
+import { checkTokenBalance, spendTokens, refundTokens } from '@/lib/supabase/services/tokenService'
 import { GoogleGenAI, Type } from "@google/genai"
 
 async function handler(request: NextRequest) {
@@ -29,10 +29,40 @@ async function handler(request: NextRequest) {
     }
     console.log('Job marked as processing:', jobId)
 
+    // STEP 1: Token cost for answer regenerate is 0.2
+    const tokenCost = 0.2
+
     try {
+
+      // STEP 2: Check token balance BEFORE any work
+      const hasEnoughTokens = await checkTokenBalance(supabase, userId, tokenCost)
+      if (!hasEnoughTokens) {
+        console.error('Insufficient tokens for job', jobId, '- required:', tokenCost)
+        await supabase
+          .from('interview_qa_jobs')
+          .update({ status: 'failed', error_message: 'Insufficient tokens' })
+          .eq('id', jobId)
+        return NextResponse.json({ error: 'Insufficient tokens' }, { status: 402 })
+      }
+
+      // STEP 3: Spend tokens UPFRONT
+      const tokenSpent = await spendTokens(supabase, userId, tokenCost)
+      if (!tokenSpent) {
+        console.error('Failed to spend tokens for job', jobId)
+        await supabase
+          .from('interview_qa_jobs')
+          .update({ status: 'failed', error_message: 'Token deduction failed' })
+          .eq('id', jobId)
+        return NextResponse.json({ error: 'Token deduction failed' }, { status: 500 })
+      }
+
+      console.log(`✅ Charged ${tokenCost} tokens upfront for job`, jobId)
+
       // Fetch the interview data
       const interview = await fetchInterviewByIdServer(interviewId, userId)
       if (!interview) {
+        await refundTokens(supabase, userId, tokenCost)
+        console.log(`♻️ Refunded ${tokenCost} tokens for job`, jobId)
         await supabase
           .from('interview_qa_jobs')
           .update({ status: 'failed', error_message: 'Interview not found' })
@@ -49,6 +79,8 @@ async function handler(request: NextRequest) {
         .single()
 
       if (qaError || !qa || !qa.questions_data || !qa.answers_data) {
+        await refundTokens(supabase, userId, tokenCost)
+        console.log(`♻️ Refunded ${tokenCost} tokens for job`, jobId)
         await supabase
           .from('interview_qa_jobs')
           .update({ status: 'failed', error_message: 'QA record not found' })
@@ -64,6 +96,8 @@ async function handler(request: NextRequest) {
       const previousAnswer = answerData[category]?.[index]
 
       if (!currentQuestion || !previousAnswer) {
+        await refundTokens(supabase, userId, tokenCost)
+        console.log(`♻️ Refunded ${tokenCost} tokens for job`, jobId)
         await supabase
           .from('interview_qa_jobs')
           .update({ status: 'failed', error_message: 'Question or Answer not found' })
@@ -75,7 +109,7 @@ async function handler(request: NextRequest) {
       const prompt = generateRegeneratePrompt(interview, category, currentQuestion, previousAnswer, comment)
       console.log('Generated regenerate prompt for job', jobId, 'length:', prompt.length)
 
-      // Generate with Gemini
+      // STEP 4: Generate with Gemini (user already paid)
       const regeneratedAnswer = await generateAnswerWithGemini(prompt)
       console.log('Generated regenerated answer for job', jobId, 'length:', regeneratedAnswer.length)
 
@@ -108,6 +142,8 @@ async function handler(request: NextRequest) {
 
       } catch (error) {
         console.error('JSON parsing/validation failed for job', jobId, ':', error)
+        await refundTokens(supabase, userId, tokenCost)
+        console.log(`♻️ Refunded ${tokenCost} tokens due to JSON parsing error for job`, jobId)
         await supabase
           .from('interview_qa_jobs')
           .update({ status: 'failed', error_message: 'Failed to generate valid JSON answer' })
@@ -150,6 +186,8 @@ async function handler(request: NextRequest) {
 
       if (saveError) {
         console.error('Error saving QA for job', jobId, ':', saveError)
+        await refundTokens(supabase, userId, tokenCost)
+        console.log(`♻️ Refunded ${tokenCost} tokens due to save error for job`, jobId)
         await supabase
           .from('interview_qa_jobs')
           .update({ status: 'failed', error_message: 'Failed to save QA to database' })
@@ -157,15 +195,7 @@ async function handler(request: NextRequest) {
         return NextResponse.json({ error: 'Database save failed' }, { status: 500 })
       }
 
-      // Deduct tokens (0.2 tokens per regenerate operation)
-      const tokenCost = 0.2
-      const tokenSpent = await spendTokens(supabase, userId, tokenCost)
-      if (!tokenSpent) {
-        console.error('Failed to deduct tokens for job', jobId)
-        // Don't fail the job for token deduction failure, but log it
-      }
-
-      // Mark job as completed
+      // Mark job as completed (tokens already spent)
       const { error: updateError } = await supabase
         .from('interview_qa_jobs')
         .update({
@@ -185,6 +215,8 @@ async function handler(request: NextRequest) {
 
     } catch (error) {
       console.error('Error in answer regenerate for job', jobId, ':', error)
+      await refundTokens(supabase, userId, tokenCost)
+      console.log(`♻️ Refunded ${tokenCost} tokens due to error for job`, jobId)
       await supabase
         .from('interview_qa_jobs')
         .update({
@@ -334,6 +366,5 @@ async function generateAnswerWithGemini(prompt: string): Promise<string> {
   throw new Error('No models available')
 }
 
-// TEMPORARY: Bypass signature verification for debugging
-// export const POST = verifySignatureAppRouter(handler, { clockTolerance: 30000 })
-export const POST = handler
+// Signature verification enabled - QStash will verify requests using signing keys
+export const POST = verifySignatureAppRouter(handler, { clockTolerance: 30000 })

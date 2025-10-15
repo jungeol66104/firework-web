@@ -93,7 +93,7 @@ export function InterviewEditForm({ interview, user }: InterviewEditFormProps) {
                 <FormItem>
                   <FormLabel>기업명</FormLabel>
                   <FormControl>
-                    <Input placeholder="기업명을 입력하세요" {...field} />
+                    <Input placeholder="기업명을 입력하세요" className="rounded-none" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -107,7 +107,7 @@ export function InterviewEditForm({ interview, user }: InterviewEditFormProps) {
                 <FormItem>
                   <FormLabel>직무</FormLabel>
                   <FormControl>
-                    <Input placeholder="직무를 입력하세요" {...field} />
+                    <Input placeholder="직무를 입력하세요" className="rounded-none" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -121,7 +121,7 @@ export function InterviewEditForm({ interview, user }: InterviewEditFormProps) {
                 <FormItem>
                   <FormLabel>채용공고</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="채용공고 내용을 입력하세요" className="min-h-[100px]" {...field} />
+                    <Textarea placeholder="채용공고 내용을 입력하세요" className="min-h-[100px] rounded-none" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -135,7 +135,7 @@ export function InterviewEditForm({ interview, user }: InterviewEditFormProps) {
                 <FormItem>
                   <FormLabel>자기소개서</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="자기소개서 내용을 입력하세요" className="min-h-[100px]" {...field} />
+                    <Textarea placeholder="자기소개서 내용을 입력하세요" className="min-h-[100px] rounded-none" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -149,7 +149,7 @@ export function InterviewEditForm({ interview, user }: InterviewEditFormProps) {
                 <FormItem>
                   <FormLabel>이력서</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="이력서 내용을 입력하세요" className="min-h-[100px]" {...field} />
+                    <Textarea placeholder="이력서 내용을 입력하세요" className="min-h-[100px] rounded-none" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -163,7 +163,7 @@ export function InterviewEditForm({ interview, user }: InterviewEditFormProps) {
                 <FormItem>
                   <FormLabel>기업 정보</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="기업에 대한 정보를 입력하세요" className="min-h-[100px]" {...field} />
+                    <Textarea placeholder="기업에 대한 정보를 입력하세요" className="min-h-[100px] rounded-none" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -180,7 +180,7 @@ export function InterviewEditForm({ interview, user }: InterviewEditFormProps) {
                 <FormItem>
                   <FormLabel>예상 질문 (선택)</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="면접에서 예상되는 질문들을 입력하세요" className="min-h-[100px]" {...field} />
+                    <Textarea placeholder="면접에서 예상되는 질문들을 입력하세요" className="min-h-[100px] rounded-none" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -194,7 +194,7 @@ export function InterviewEditForm({ interview, user }: InterviewEditFormProps) {
                 <FormItem>
                   <FormLabel>기업 평가 항목 (선택)</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="기업이 공개한 평가 항목 및 비중을 입력하세요" className="min-h-[100px]" {...field} />
+                    <Textarea placeholder="기업이 공개한 평가 항목 및 비중을 입력하세요" className="min-h-[100px] rounded-none" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -208,7 +208,7 @@ export function InterviewEditForm({ interview, user }: InterviewEditFormProps) {
                 <FormItem>
                   <FormLabel>기타 (선택)</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="기타 추가 정보를 입력하세요" className="min-h-[100px]" {...field} />
+                    <Textarea placeholder="기타 추가 정보를 입력하세요" className="min-h-[100px] rounded-none" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -233,14 +233,14 @@ export function InterviewEditForm({ interview, user }: InterviewEditFormProps) {
                 <Button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-8 py-2"
+                  className="px-8 py-2 rounded-none"
                 >
                   {isSubmitting ? "저장 중..." : "저장"}
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
-                  className="px-8 py-2"
+                  className="px-8 py-2 rounded-none"
                   onClick={() => router.back()}
                 >
                   취소

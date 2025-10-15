@@ -1,30 +1,49 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Loader, Search, X, Copy } from 'lucide-react';
+import { Loader, Search, X, Copy, Filter } from 'lucide-react';
 import { createClient } from '@/lib/supabase/clients/client';
-import { fetchAllUsers } from '@/lib/admin/adminServices';
-import { Profile } from '@/lib/types';
-import { useRouter } from 'next/navigation';
+import { fetchAllQAs } from '@/lib/admin/adminServices';
+import { useRouter, useSearchParams } from 'next/navigation';
 
-export default function AdminUsersPage() {
+interface InterviewQA {
+  id: string;
+  interview_id: string | null;
+  name: string;
+  questions_data: any;
+  answers_data: any;
+  is_default: boolean;
+  type: string;
+  created_at: string;
+}
+
+export default function AdminQAsPage() {
   const router = useRouter();
-  const [data, setData] = useState<Profile[]>([]);
+  const searchParams = useSearchParams();
+  const interviewIdFilter = searchParams.get('interview_id');
+
+  const [data, setData] = useState<InterviewQA[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(100);
   const [nameSearchInput, setNameSearchInput] = useState('');
   const [showNameDropdown, setShowNameDropdown] = useState(false);
+  const [typeFilter, setTypeFilter] = useState<string[]>([]);
+  const [showTypeDropdown, setShowTypeDropdown] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const nameDropdownRef = useRef<HTMLDivElement>(null);
+  const typeDropdownRef = useRef<HTMLDivElement>(null);
 
   const [columnWidths, setColumnWidths] = useState({
     index: 50,
     id: 100,
-    name: 150,
-    email: 200,
+    name: 200,
+    type: 120,
+    interviewId: 120,
+    questionsCount: 100,
+    answersCount: 100,
+    isDefault: 80,
     created: 120,
-    actions: 150,
   });
 
   const resizingColumn = useRef<string | null>(null);
@@ -32,13 +51,16 @@ export default function AdminUsersPage() {
   const startWidth = useRef(0);
 
   useEffect(() => {
-    fetchUsers();
-  }, []);
+    fetchQAs();
+  }, [interviewIdFilter]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (nameDropdownRef.current && !nameDropdownRef.current.contains(event.target as Node)) {
         setShowNameDropdown(false);
+      }
+      if (typeDropdownRef.current && !typeDropdownRef.current.contains(event.target as Node)) {
+        setShowTypeDropdown(false);
       }
     };
 
@@ -46,14 +68,17 @@ export default function AdminUsersPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const fetchUsers = async () => {
+  const fetchQAs = async () => {
     setLoading(true);
     try {
       const supabase = createClient();
-      const result = await fetchAllUsers(supabase, { limit: 1000 });
-      setData(result.users);
+      const result = await fetchAllQAs(supabase, {
+        limit: 1000,
+        interview_id: interviewIdFilter || undefined
+      });
+      setData(result.qas);
     } catch (error) {
-      console.error('Error fetching users:', error);
+      console.error('Error fetching QAs:', error);
       setData([]);
     } finally {
       setLoading(false);
@@ -64,6 +89,17 @@ export default function AdminUsersPage() {
     navigator.clipboard.writeText(id);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const handleTypeToggle = (type: string) => {
+    setTypeFilter(prev => {
+      if (prev.includes(type)) {
+        return prev.filter(t => t !== type);
+      } else {
+        return [...prev, type];
+      }
+    });
+    setPage(1);
   };
 
   const handleMouseDown = (e: React.MouseEvent, columnKey: keyof typeof columnWidths) => {
@@ -94,27 +130,32 @@ export default function AdminUsersPage() {
     document.removeEventListener('mouseup', handleMouseUp);
   };
 
-  const handleRowClick = (userId: string) => {
-    router.push(`/admin/users/${userId}`);
+  const handleRowClick = (qaId: string) => {
+    router.push(`/admin/qas/${qaId}`);
   };
 
-  const handleInterviewsClick = (e: React.MouseEvent, userId: string) => {
-    e.stopPropagation();
-    router.push(`/admin/interviews?user_id=${userId}`);
-  };
+  // Get unique types from data
+  const uniqueTypes = Array.from(new Set(data.map(qa => qa.type).filter(Boolean)));
 
-  const handlePaymentsClick = (e: React.MouseEvent, userId: string) => {
-    e.stopPropagation();
-    router.push(`/admin/payments?user_id=${userId}`);
-  };
+  // Filter data by name search and type
+  const filteredData = data.filter(qa => {
+    // Name search filter
+    if (nameSearchInput) {
+      const qaName = qa.name?.toLowerCase() || '';
+      const search = nameSearchInput.toLowerCase();
+      if (!qaName.includes(search)) {
+        return false;
+      }
+    }
 
-  // Filter data by name search
-  const filteredData = data.filter(user => {
-    if (!nameSearchInput) return true;
-    const userName = user.name?.toLowerCase() || '';
-    const userEmail = user.email?.toLowerCase() || '';
-    const search = nameSearchInput.toLowerCase();
-    return userName.includes(search) || userEmail.includes(search);
+    // Type filter
+    if (typeFilter.length > 0) {
+      if (!typeFilter.includes(qa.type)) {
+        return false;
+      }
+    }
+
+    return true;
   });
 
   // Paginate filtered data
@@ -123,11 +164,36 @@ export default function AdminUsersPage() {
   const paginatedData = filteredData.slice(start, end);
   const totalPages = Math.ceil(filteredData.length / pageSize);
 
+  // Helper function to count questions/answers
+  const getQuestionsCount = (questionsData: any) => {
+    if (!questionsData) return 0;
+    if (Array.isArray(questionsData)) return questionsData.length;
+    if (typeof questionsData === 'object') {
+      // Count items in nested arrays (e.g., {general_personality: [...], cover_letter_personality: [...]})
+      return Object.values(questionsData).reduce((total: number, arr) => {
+        return total + (Array.isArray(arr) ? arr.filter(item => item !== null && item !== undefined).length : 0);
+      }, 0);
+    }
+    return 0;
+  };
+
+  const getAnswersCount = (answersData: any) => {
+    if (!answersData) return 0;
+    if (Array.isArray(answersData)) return answersData.length;
+    if (typeof answersData === 'object') {
+      // Count items in nested arrays (e.g., {general_personality: [...], cover_letter_personality: [...]})
+      return Object.values(answersData).reduce((total: number, arr) => {
+        return total + (Array.isArray(arr) ? arr.filter(item => item !== null && item !== undefined).length : 0);
+      }, 0);
+    }
+    return 0;
+  };
+
   if (loading && data.length === 0) {
     return (
       <div className="h-full flex-1 bg-white">
         <div className="max-w-4xl mx-auto pb-4">
-          <h1 className="text-2xl font-bold mb-4">사용자</h1>
+          <h1 className="text-2xl font-bold mb-4">질의응답</h1>
           <div className="flex items-center justify-center py-20">
             <Loader className="animate-spin w-4 h-4" />
           </div>
@@ -140,7 +206,7 @@ export default function AdminUsersPage() {
     <div className="bg-white h-full flex flex-col overflow-hidden" style={{ height: 'calc(100vh - 60px)' }}>
       <div className="max-w-4xl mx-auto pb-4 w-full flex-1 flex flex-col overflow-hidden">
         <div className="mb-4">
-          <h1 className="text-2xl font-bold">사용자</h1>
+          <h1 className="text-2xl font-bold">질의응답</h1>
         </div>
 
         {/* Table */}
@@ -179,7 +245,7 @@ export default function AdminUsersPage() {
                                 type="text"
                                 value={nameSearchInput}
                                 onChange={(e) => { setNameSearchInput(e.target.value); setPage(1); }}
-                                placeholder="이름 또는 이메일"
+                                placeholder="이름"
                                 className="flex-1 px-2 py-1 text-xs outline-none"
                                 autoFocus
                               />
@@ -201,42 +267,88 @@ export default function AdminUsersPage() {
                       onMouseDown={(e) => handleMouseDown(e, 'name')}
                     />
                   </th>
-                  <th className="px-3 py-2 text-left text-xs border-r relative" style={{ width: columnWidths.email, minWidth: columnWidths.email }}>
-                    이메일
+                  <th className="px-3 py-2 text-left text-xs border-r relative" style={{ width: columnWidths.type, minWidth: columnWidths.type }}>
+                    <div className="flex items-center justify-between">
+                      <span>타입</span>
+                      <div className="relative" ref={typeDropdownRef}>
+                        <button
+                          onClick={() => setShowTypeDropdown(!showTypeDropdown)}
+                          className="p-1 hover:bg-gray-200 cursor-pointer"
+                        >
+                          <Filter className={`w-3 h-3 ${typeFilter.length > 0 ? 'text-blue-600' : 'text-gray-400'}`} />
+                        </button>
+                        {showTypeDropdown && (
+                          <div className="absolute top-full left-0 mt-1 bg-white border shadow-lg" style={{ minWidth: '150px', zIndex: 9999 }}>
+                            {uniqueTypes.map(type => (
+                              <div
+                                key={type}
+                                onClick={() => handleTypeToggle(type)}
+                                className={`px-3 py-2 text-xs hover:bg-gray-100 cursor-pointer ${
+                                  typeFilter.includes(type) ? 'bg-blue-50 text-blue-600' : ''
+                                }`}
+                              >
+                                {type}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                     <div
                       className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-blue-500"
-                      onMouseDown={(e) => handleMouseDown(e, 'email')}
+                      onMouseDown={(e) => handleMouseDown(e, 'type')}
                     />
                   </th>
-                  <th className="px-3 py-2 text-left text-xs border-r relative" style={{ width: columnWidths.created, minWidth: columnWidths.created }}>
-                    가입일
+                  <th className="px-3 py-2 text-left text-xs border-r relative" style={{ width: columnWidths.interviewId, minWidth: columnWidths.interviewId }}>
+                    면접 ID
                     <div
                       className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-blue-500"
-                      onMouseDown={(e) => handleMouseDown(e, 'created')}
+                      onMouseDown={(e) => handleMouseDown(e, 'interviewId')}
                     />
                   </th>
-                  <th className="px-3 py-2 text-left text-xs" style={{ width: columnWidths.actions, minWidth: columnWidths.actions }}>
-                    바로가기
+                  <th className="px-3 py-2 text-left text-xs border-r relative" style={{ width: columnWidths.questionsCount, minWidth: columnWidths.questionsCount }}>
+                    질문 수
+                    <div
+                      className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-blue-500"
+                      onMouseDown={(e) => handleMouseDown(e, 'questionsCount')}
+                    />
+                  </th>
+                  <th className="px-3 py-2 text-left text-xs border-r relative" style={{ width: columnWidths.answersCount, minWidth: columnWidths.answersCount }}>
+                    답변 수
+                    <div
+                      className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-blue-500"
+                      onMouseDown={(e) => handleMouseDown(e, 'answersCount')}
+                    />
+                  </th>
+                  <th className="px-3 py-2 text-left text-xs border-r relative" style={{ width: columnWidths.isDefault, minWidth: columnWidths.isDefault }}>
+                    기본값
+                    <div
+                      className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-blue-500"
+                      onMouseDown={(e) => handleMouseDown(e, 'isDefault')}
+                    />
+                  </th>
+                  <th className="px-3 py-2 text-left text-xs" style={{ width: columnWidths.created, minWidth: columnWidths.created }}>
+                    생성일
                   </th>
                 </tr>
               </thead>
               <tbody>
-                {paginatedData.map((user, index) => (
+                {paginatedData.map((qa, index) => (
                   <tr
-                    key={user.id}
+                    key={qa.id}
                     className="hover:bg-gray-50 border-b cursor-pointer"
-                    onClick={() => handleRowClick(user.id)}
+                    onClick={() => handleRowClick(qa.id)}
                   >
                     <td className="px-3 py-2 text-xs text-gray-500 border-r text-center" style={{ width: columnWidths.index, minWidth: columnWidths.index }}>
                       {start + index + 1}
                     </td>
-                    <td className="px-3 py-2 text-xs font-mono text-gray-500 overflow-hidden border-r" title={user.id} style={{ width: columnWidths.id, minWidth: columnWidths.id }}>
+                    <td className="px-3 py-2 text-xs font-mono text-gray-500 overflow-hidden border-r" title={qa.id} style={{ width: columnWidths.id, minWidth: columnWidths.id }}>
                       <div className="flex items-center justify-between gap-1">
-                        <div className="truncate">{user.id.slice(0, 8)}</div>
+                        <div className="truncate">{qa.id.slice(0, 8)}</div>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleCopyId(user.id);
+                            handleCopyId(qa.id);
                           }}
                           className="flex-shrink-0 p-1 hover:bg-gray-200 cursor-pointer"
                         >
@@ -245,34 +357,25 @@ export default function AdminUsersPage() {
                       </div>
                     </td>
                     <td className="px-3 py-2 text-xs overflow-hidden border-r" style={{ width: columnWidths.name, minWidth: columnWidths.name }}>
-                      <div className="flex items-center gap-2">
-                        <div className="truncate">{user.name || '-'}</div>
-                        {user.is_admin && (
-                          <span className="px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-800">관리자</span>
-                        )}
-                      </div>
+                      <div className="truncate">{qa.name || '-'}</div>
                     </td>
-                    <td className="px-3 py-2 text-xs overflow-hidden border-r" title={user.email || ''} style={{ width: columnWidths.email, minWidth: columnWidths.email }}>
-                      <div className="truncate">{user.email || '-'}</div>
+                    <td className="px-3 py-2 text-xs overflow-hidden border-r" style={{ width: columnWidths.type, minWidth: columnWidths.type }}>
+                      <div className="truncate">{qa.type || '-'}</div>
                     </td>
-                    <td className="px-3 py-2 text-xs border-r" style={{ width: columnWidths.created, minWidth: columnWidths.created }}>
-                      {new Date(user.created_at).toLocaleDateString('ko-KR')}
+                    <td className="px-3 py-2 text-xs font-mono text-gray-500 border-r" title={qa.interview_id || ''} style={{ width: columnWidths.interviewId, minWidth: columnWidths.interviewId }}>
+                      {qa.interview_id?.slice(0, 8) || '-'}
                     </td>
-                    <td className="px-3 py-2 text-xs" style={{ width: columnWidths.actions, minWidth: columnWidths.actions }}>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={(e) => handleInterviewsClick(e, user.id)}
-                          className="px-2 py-1 text-xs border hover:bg-gray-50 cursor-pointer"
-                        >
-                          면접
-                        </button>
-                        <button
-                          onClick={(e) => handlePaymentsClick(e, user.id)}
-                          className="px-2 py-1 text-xs border hover:bg-gray-50 cursor-pointer"
-                        >
-                          결제
-                        </button>
-                      </div>
+                    <td className="px-3 py-2 text-xs border-r text-center" style={{ width: columnWidths.questionsCount, minWidth: columnWidths.questionsCount }}>
+                      {getQuestionsCount(qa.questions_data)}
+                    </td>
+                    <td className="px-3 py-2 text-xs border-r text-center" style={{ width: columnWidths.answersCount, minWidth: columnWidths.answersCount }}>
+                      {getAnswersCount(qa.answers_data)}
+                    </td>
+                    <td className="px-3 py-2 text-xs border-r text-center" style={{ width: columnWidths.isDefault, minWidth: columnWidths.isDefault }}>
+                      {qa.is_default ? '✓' : '-'}
+                    </td>
+                    <td className="px-3 py-2 text-xs" style={{ width: columnWidths.created, minWidth: columnWidths.created }}>
+                      {new Date(qa.created_at).toLocaleDateString('ko-KR')}
                     </td>
                   </tr>
                 ))}

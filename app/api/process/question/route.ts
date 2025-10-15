@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifySignatureAppRouter } from '@upstash/qstash/nextjs'
 import { createAdminClient } from '@/lib/supabase/clients/admin'
 import { fetchInterviewByIdServer } from '@/lib/supabase/services/serverServices'
-import { spendTokens } from '@/lib/supabase/services/tokenService'
+import { checkTokenBalance, spendTokens, refundTokens } from '@/lib/supabase/services/tokenService'
 import { GoogleGenAI, Type } from "@google/genai"
 
 async function handler(request: NextRequest) {
@@ -34,10 +34,48 @@ async function handler(request: NextRequest) {
       })
       .eq('id', jobId)
 
+    // STEP 1: Check token balance BEFORE any work
+    const tokenCost = 3
+
     try {
+      const hasEnoughTokens = await checkTokenBalance(supabase, userId, tokenCost)
+      if (!hasEnoughTokens) {
+        console.error('Insufficient tokens for job', jobId, '- required:', tokenCost)
+        await supabase
+          .from('interview_qa_jobs')
+          .update({
+            status: 'failed',
+            error_message: 'Insufficient tokens',
+            completed_at: new Date().toISOString()
+          })
+          .eq('id', jobId)
+        return NextResponse.json({ error: 'Insufficient tokens' }, { status: 402 })
+      }
+
+      // STEP 2: Spend tokens UPFRONT (charge user before work)
+      const tokenSpent = await spendTokens(supabase, userId, tokenCost)
+      if (!tokenSpent) {
+        console.error('Failed to spend tokens for job', jobId)
+        await supabase
+          .from('interview_qa_jobs')
+          .update({
+            status: 'failed',
+            error_message: 'Token deduction failed',
+            completed_at: new Date().toISOString()
+          })
+          .eq('id', jobId)
+        return NextResponse.json({ error: 'Token deduction failed' }, { status: 500 })
+      }
+
+      console.log(`✅ Charged ${tokenCost} tokens upfront for job`, jobId)
+
       // Fetch the interview data
       const interview = await fetchInterviewByIdServer(interviewId, userId)
       if (!interview) {
+        // Refund tokens since we failed before generation
+        await refundTokens(supabase, userId, tokenCost)
+        console.log(`♻️ Refunded ${tokenCost} tokens for job`, jobId)
+
         await supabase
           .from('interview_qa_jobs')
           .update({
@@ -57,8 +95,8 @@ async function handler(request: NextRequest) {
       // Prepare the prompt
       const prompt = generatePrompt(interview, undefined, previousQuestions)
       console.log('Generated prompt for job', jobId, 'length:', prompt.length)
-      
-      // Generate with Gemini
+
+      // STEP 3: Generate with Gemini (user already paid)
       const question = await generateQuestionWithGemini(prompt)
       console.log('Generated question for job', jobId, 'length:', question.length)
 
@@ -97,6 +135,10 @@ async function handler(request: NextRequest) {
         
       } catch (error) {
         console.error('JSON parsing/validation failed for job', jobId, ':', error)
+        // Refund tokens on parsing failure
+        await refundTokens(supabase, userId, tokenCost)
+        console.log(`♻️ Refunded ${tokenCost} tokens due to JSON parsing error for job`, jobId)
+
         await supabase
           .from('interview_qa_jobs')
           .update({
@@ -147,6 +189,10 @@ async function handler(request: NextRequest) {
 
       if (saveError) {
         console.error('Error saving QA for job', jobId, ':', saveError)
+        // Refund tokens on save failure
+        await refundTokens(supabase, userId, tokenCost)
+        console.log(`♻️ Refunded ${tokenCost} tokens due to save error for job`, jobId)
+
         await supabase
           .from('interview_qa_jobs')
           .update({
@@ -158,14 +204,7 @@ async function handler(request: NextRequest) {
         return NextResponse.json({ error: 'Database save failed' }, { status: 500 })
       }
 
-      // Deduct tokens (3 tokens for question generation)
-      const tokenSpent = await spendTokens(supabase, userId, 3)
-      if (!tokenSpent) {
-        console.error('Failed to deduct tokens for job', jobId)
-        // Don't fail the job for token deduction failure, but log it
-      }
-
-      // Mark job as completed
+      // Mark job as completed (tokens already spent)
       await supabase
         .from('interview_qa_jobs')
         .update({
@@ -179,6 +218,10 @@ async function handler(request: NextRequest) {
 
     } catch (error) {
       console.error('Error in question generation for job', jobId, ':', error)
+      // Refund tokens on any failure
+      await refundTokens(supabase, userId, tokenCost)
+      console.log(`♻️ Refunded ${tokenCost} tokens due to error for job`, jobId)
+
       await supabase
         .from('interview_qa_jobs')
         .update({
@@ -406,6 +449,5 @@ async function generateQuestionWithGemini(prompt: string): Promise<string> {
   throw new Error('No models available')
 }
 
-// TEMPORARY: Bypass signature verification for debugging
-// export const POST = verifySignatureAppRouter(handler, { clockTolerance: 30000 })
-export const POST = handler
+// Signature verification enabled - QStash will verify requests using signing keys
+export const POST = verifySignatureAppRouter(handler, { clockTolerance: 30000 })

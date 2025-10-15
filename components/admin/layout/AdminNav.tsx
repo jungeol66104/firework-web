@@ -55,8 +55,9 @@ export const AdminNav: React.FC = () => {
   const navItems = [
     { href: '/admin/users', label: '사용자' },
     { href: '/admin/interviews', label: '면접' },
-    { href: '/admin/questions', label: '질문' },
-    { href: '/admin/answers', label: '답변' },
+    { href: '/admin/qas', label: '질의응답' },
+    { href: '/admin/reports', label: '신고' },
+    { href: '/admin/payments', label: '결제' },
   ]
 
   return (
@@ -86,7 +87,7 @@ export const AdminNav: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" className="sm:px-3 px-0 sm:hover:bg-gray-100 hover:bg-transparent">
+          <Button variant="ghost" size="sm" className="sm:px-3 px-0 sm:hover:bg-gray-100 hover:bg-transparent rounded-none">
             {/* Mobile: First letter with border */}
             <div className="sm:hidden w-8 h-8 rounded-full border border-blue-300 flex items-center justify-center">
               <span className="text-sm font-medium text-blue-700">
@@ -101,7 +102,7 @@ export const AdminNav: React.FC = () => {
 
           <Button
             variant="outline"
-            className="sm:px-3 sm:py-1 sm:h-8 sm:w-auto w-8 h-8 p-0 text-xs flex items-center justify-center gap-2"
+            className="sm:px-3 sm:py-1 sm:h-8 sm:w-auto w-8 h-8 p-0 text-sm flex items-center justify-center gap-2 rounded-none"
             onClick={handleSignOut}
           >
             <LogOut className="w-4 h-4 sm:hidden" />

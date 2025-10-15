@@ -1,5 +1,5 @@
 import { SupabaseClient } from '@supabase/supabase-js'
-import { Interview, Profile } from '@/lib/types'
+import { Interview, Profile, Report, ReportStatus } from '@/lib/types'
 
 // Admin-specific services (no user_id filtering for cross-user access)
 
@@ -59,7 +59,7 @@ export async function fetchAllInterviews(
     user_id?: string
   } = {}
 ): Promise<{
-  interviews: Interview[]
+  interviews: any[]
   nextCursor?: string
   hasMore: boolean
 }> {
@@ -67,7 +67,7 @@ export async function fetchAllInterviews(
 
   let query = supabase
     .from('interviews')
-    .select('*')
+    .select('*, user:profiles!interviews_user_id_fkey(id, name, email)')
     .order(orderBy, { ascending: orderDirection === 'asc' })
     .limit(limit + 1)
 
@@ -230,6 +230,22 @@ export async function getInterviewById(supabase: SupabaseClient, interviewId: st
   return data
 }
 
+// Get QA info by ID (for displaying QA details)
+export async function getQAById(supabase: SupabaseClient, qaId: string): Promise<any | null> {
+  const { data, error } = await supabase
+    .from('interview_qas')
+    .select('*')
+    .eq('id', qaId)
+    .single()
+
+  if (error) {
+    if (error.code === 'PGRST116') return null // Not found
+    throw new Error(`Failed to fetch QA: ${error.message}`)
+  }
+
+  return data
+}
+
 // Admin delete operations (for future use)
 export async function adminDeleteInterview(supabase: SupabaseClient, interviewId: string): Promise<void> {
   const { error } = await supabase
@@ -261,5 +277,218 @@ export async function adminDeleteQuestion(supabase: SupabaseClient, questionId: 
 
   if (error) {
     throw new Error(`Failed to delete question: ${error.message}`)
+  }
+}
+
+// Report-related admin services
+export interface ReportWithDetails extends Report {
+  user: Profile | null
+  interview: {
+    id: string
+    company_name: string
+    position: string
+  } | null
+}
+
+// Fetch all reports with user and interview details
+export async function fetchAllReports(
+  supabase: SupabaseClient,
+  params: {
+    status?: ReportStatus
+  } = {}
+): Promise<ReportWithDetails[]> {
+  const { status } = params
+
+  let query = supabase
+    .from('reports')
+    .select(`
+      *,
+      user:profiles!reports_user_id_fkey(id, name, email),
+      interview:interviews!reports_interview_id_fkey(id, company_name, position)
+    `)
+    .order('created_at', { ascending: false })
+
+  if (status) {
+    query = query.eq('status', status)
+  }
+
+  const { data, error } = await query
+
+  if (error) {
+    throw new Error(`Failed to fetch reports: ${error.message}`)
+  }
+
+  return (data as any[]).map(report => ({
+    ...report,
+    user: report.user || null,
+    interview: report.interview || null
+  })) as ReportWithDetails[]
+}
+
+// Get report with full details for admin review
+export async function getReportWithDetails(
+  supabase: SupabaseClient,
+  reportId: string
+): Promise<ReportWithDetails | null> {
+  const { data, error } = await supabase
+    .from('reports')
+    .select(`
+      *,
+      user:profiles!reports_user_id_fkey(id, name, email),
+      interview:interviews!reports_interview_id_fkey(id, company_name, position)
+    `)
+    .eq('id', reportId)
+    .single()
+
+  if (error) {
+    if (error.code === 'PGRST116') return null
+    throw new Error(`Failed to fetch report: ${error.message}`)
+  }
+
+  return {
+    ...data,
+    user: data.user || null,
+    interview: data.interview || null
+  } as ReportWithDetails
+}
+
+// Fetch all interview QAs (optionally filtered by interview_id)
+export async function fetchAllQAs(
+  supabase: SupabaseClient,
+  params: {
+    limit?: number
+    cursor?: string
+    orderBy?: 'created_at' | 'name'
+    orderDirection?: 'asc' | 'desc'
+    interview_id?: string
+    type?: string
+  } = {}
+): Promise<{
+  qas: any[]
+  nextCursor?: string
+  hasMore: boolean
+}> {
+  const { limit = 10, cursor, orderBy = 'created_at', orderDirection = 'desc', interview_id, type } = params
+
+  let query = supabase
+    .from('interview_qas')
+    .select('*')
+    .order(orderBy, { ascending: orderDirection === 'asc' })
+    .limit(limit + 1)
+
+  // Filter by interview_id if provided
+  if (interview_id) {
+    query = query.eq('interview_id', interview_id)
+  }
+
+  // Filter by type if provided
+  if (type) {
+    query = query.eq('type', type)
+  }
+
+  if (cursor) {
+    const operator = orderDirection === 'asc' ? 'gt' : 'lt'
+    query = query.filter(orderBy, operator, cursor)
+  }
+
+  const { data, error } = await query
+
+  if (error) {
+    throw new Error(`Failed to fetch QAs: ${error.message}`)
+  }
+
+  const qas = data || []
+  const hasMore = qas.length > limit
+  const nextCursor = hasMore ? qas[limit - 1][orderBy] : undefined
+
+  return {
+    qas: hasMore ? qas.slice(0, limit) : qas,
+    nextCursor,
+    hasMore
+  }
+}
+
+// Get report detail with all interview_qas versions for comparison
+export async function getReportDetailWithVersions(
+  supabase: SupabaseClient,
+  reportId: string
+): Promise<{
+  report: ReportWithDetails
+  qaVersions: any[]
+} | null> {
+  // First get the report
+  const report = await getReportWithDetails(supabase, reportId)
+  if (!report) return null
+
+  // Then get all interview_qas for this interview
+  const { data: qaVersions, error } = await supabase
+    .from('interview_qas')
+    .select('*')
+    .eq('interview_id', report.interview_id)
+    .order('created_at', { ascending: true })
+
+  if (error) {
+    throw new Error(`Failed to fetch QA versions: ${error.message}`)
+  }
+
+  return {
+    report,
+    qaVersions: qaVersions || []
+  }
+}
+
+// Fetch all payments (optionally filtered by user_id)
+export async function fetchAllPayments(
+  supabase: SupabaseClient,
+  params: {
+    limit?: number
+    cursor?: string
+    orderBy?: 'created_at' | 'completed_at' | 'amount'
+    orderDirection?: 'asc' | 'desc'
+    user_id?: string
+    status?: string
+  } = {}
+): Promise<{
+  payments: any[]
+  nextCursor?: string
+  hasMore: boolean
+}> {
+  const { limit = 10, cursor, orderBy = 'created_at', orderDirection = 'desc', user_id, status } = params
+
+  let query = supabase
+    .from('payments')
+    .select('*, user:profiles!payments_user_id_fkey(id, name, email)')
+    .order(orderBy, { ascending: orderDirection === 'asc' })
+    .limit(limit + 1)
+
+  // Filter by user_id if provided
+  if (user_id) {
+    query = query.eq('user_id', user_id)
+  }
+
+  // Filter by status if provided
+  if (status) {
+    query = query.eq('status', status)
+  }
+
+  if (cursor) {
+    const operator = orderDirection === 'asc' ? 'gt' : 'lt'
+    query = query.filter(orderBy, operator, cursor)
+  }
+
+  const { data, error } = await query
+
+  if (error) {
+    throw new Error(`Failed to fetch payments: ${error.message}`)
+  }
+
+  const payments = data || []
+  const hasMore = payments.length > limit
+  const nextCursor = hasMore ? payments[limit - 1][orderBy] : undefined
+
+  return {
+    payments: hasMore ? payments.slice(0, limit) : payments,
+    nextCursor,
+    hasMore
   }
 }

@@ -81,7 +81,7 @@ export function UserEditForm({ user }: UserEditFormProps) {
                 <FormItem>
                   <FormLabel>이름 *</FormLabel>
                   <FormControl>
-                    <Input placeholder="이름을 입력하세요" {...field} />
+                    <Input placeholder="이름을 입력하세요" className="rounded-none" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -95,7 +95,7 @@ export function UserEditForm({ user }: UserEditFormProps) {
                 <FormItem>
                   <FormLabel>이메일</FormLabel>
                   <FormControl>
-                    <Input placeholder="이메일을 입력하세요" type="email" {...field} />
+                    <Input placeholder="이메일을 입력하세요" type="email" className="rounded-none" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -138,14 +138,14 @@ export function UserEditForm({ user }: UserEditFormProps) {
                 <Button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-8 py-2"
+                  className="px-8 py-2 rounded-none"
                 >
                   {isSubmitting ? "저장 중..." : "저장"}
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
-                  className="px-8 py-2"
+                  className="px-8 py-2 rounded-none"
                   onClick={() => router.back()}
                 >
                   취소

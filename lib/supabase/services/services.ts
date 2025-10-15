@@ -1,5 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js'
-import { Interview, FetchInterviewsParams, FetchInterviewsResult, CreateInterviewParams, Profile, CreateProfileParams } from '@/lib/types'
+import { Interview, FetchInterviewsParams, FetchInterviewsResult, CreateInterviewParams, Profile, CreateProfileParams, Report, CreateReportParams, UpdateReportParams } from '@/lib/types'
+import { addTokens } from './tokenService'
 
 export async function fetchInterviews(supabase: SupabaseClient, params: FetchInterviewsParams = {}): Promise<FetchInterviewsResult> {
   const { limit = 10, cursor, orderBy = 'created_at', orderDirection = 'desc', user_id } = params
@@ -513,4 +514,232 @@ export async function deleteInterviewAnswer(
   if (error) {
     throw new Error(`Failed to delete interview answer: ${error.message}`)
   }
+}
+
+// Report service functions
+export async function createReport(
+  supabase: SupabaseClient,
+  params: CreateReportParams
+): Promise<Report> {
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  
+  if (authError || !user) {
+    throw new Error('User not authenticated')
+  }
+
+  // Get interview_id from interview_qas
+  const { data: qaData, error: qaError } = await supabase
+    .from('interview_qas')
+    .select('interview_id')
+    .eq('id', params.interview_qas_id)
+    .single()
+
+  if (qaError || !qaData) {
+    throw new Error('Interview Q&A not found')
+  }
+
+  // Parse selected items to create items structure
+  const items: Report['items'] = {
+    questions: [],
+    answers: []
+  }
+
+  // Parse selected questions
+  params.selectedQuestions.forEach(itemId => {
+    const match = itemId.match(/^(.+)_q_(\d+)$/)
+    if (match) {
+      items.questions.push({
+        category: match[1],
+        index: parseInt(match[2])
+      })
+    }
+  })
+
+  // Parse selected answers
+  params.selectedAnswers.forEach(itemId => {
+    const match = itemId.match(/^(.+)_a_(\d+)$/)
+    if (match) {
+      items.answers.push({
+        category: match[1],
+        index: parseInt(match[2])
+      })
+    }
+  })
+
+  const { data, error } = await supabase
+    .from('reports')
+    .insert([{
+      user_id: user.id,
+      interview_id: qaData.interview_id,
+      interview_qas_id: params.interview_qas_id,
+      items,
+      description: params.description,
+      status: 'pending'
+    }])
+    .select()
+    .single()
+
+  if (error) {
+    throw new Error(`Failed to create report: ${error.message}`)
+  }
+
+  return data
+}
+
+export async function fetchReportsByUser(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<Report[]> {
+  const { data, error } = await supabase
+    .from('reports')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    throw new Error(`Failed to fetch reports: ${error.message}`)
+  }
+
+  return data || []
+}
+
+export async function fetchCurrentUserReports(
+  supabase: SupabaseClient
+): Promise<Report[]> {
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  
+  if (authError || !user) {
+    throw new Error('User not authenticated')
+  }
+
+  return fetchReportsByUser(supabase, user.id)
+}
+
+export async function fetchReportById(
+  supabase: SupabaseClient,
+  reportId: string
+): Promise<Report | null> {
+  const { data, error } = await supabase
+    .from('reports')
+    .select('*')
+    .eq('id', reportId)
+    .single()
+
+  if (error) {
+    if (error.code === 'PGRST116') return null // Not found
+    throw new Error(`Failed to fetch report: ${error.message}`)
+  }
+
+  return data
+}
+
+export async function updateReport(
+  supabase: SupabaseClient,
+  reportId: string,
+  updates: UpdateReportParams
+): Promise<Report> {
+  const updateData: any = {
+    ...updates,
+    updated_at: new Date().toISOString()
+  }
+
+  // If status is being set to 'resolved', add resolved_at timestamp
+  if (updates.status === 'resolved') {
+    updateData.resolved_at = new Date().toISOString()
+  }
+
+  const { data, error } = await supabase
+    .from('reports')
+    .update(updateData)
+    .eq('id', reportId)
+    .select()
+    .single()
+
+  if (error) {
+    throw new Error(`Failed to update report: ${error.message}`)
+  }
+
+  return data
+}
+
+export async function fetchAllReports(
+  supabase: SupabaseClient,
+  status?: string
+): Promise<Report[]> {
+  let query = supabase
+    .from('reports')
+    .select('*')
+    .order('created_at', { ascending: false })
+
+  if (status) {
+    query = query.eq('status', status)
+  }
+
+  const { data, error } = await query
+
+  if (error) {
+    throw new Error(`Failed to fetch reports: ${error.message}`)
+  }
+
+  return data || []
+}
+
+export async function refundReportItem(
+  supabase: SupabaseClient,
+  reportId: string,
+  itemType: 'question' | 'answer',
+  category: string,
+  index: number
+): Promise<Report> {
+  // Fetch the report
+  const report = await fetchReportById(supabase, reportId)
+  
+  if (!report) {
+    throw new Error('Report not found')
+  }
+
+  // Calculate refund amount
+  const refundAmount = itemType === 'question' ? 0.1 : 0.2
+
+  // Update the items to mark as refunded
+  const items = { ...report.items }
+  const itemsArray = itemType === 'question' ? items.questions : items.answers
+  const itemIndex = itemsArray.findIndex(
+    item => item.category === category && item.index === index
+  )
+
+  if (itemIndex === -1) {
+    throw new Error('Item not found in report')
+  }
+
+  if (itemsArray[itemIndex].refunded) {
+    throw new Error('Item already refunded')
+  }
+
+  itemsArray[itemIndex] = {
+    ...itemsArray[itemIndex],
+    refunded: true,
+    refund_amount: refundAmount,
+    refunded_at: new Date().toISOString()
+  }
+
+  // Update the report
+  const { data, error } = await supabase
+    .from('reports')
+    .update({
+      items,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', reportId)
+    .select()
+    .single()
+
+  if (error) {
+    throw new Error(`Failed to update report: ${error.message}`)
+  }
+
+  // Add tokens back to user
+  await addTokens(supabase, report.user_id, refundAmount)
+
+  return data
 }

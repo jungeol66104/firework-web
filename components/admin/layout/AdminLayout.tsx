@@ -1,6 +1,7 @@
 "use client"
 
 import React from 'react'
+import { usePathname } from 'next/navigation'
 import { AdminNav } from './AdminNav'
 
 interface AdminLayoutProps {
@@ -8,6 +9,15 @@ interface AdminLayoutProps {
 }
 
 export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
+  const pathname = usePathname()
+
+  // Hide nav for report detail pages
+  const hideNav = pathname?.includes('/admin/reports/') && pathname?.split('/').length > 3
+
+  if (hideNav) {
+    return <>{children}</>
+  }
+
   return (
     <div className="min-h-screen">
       <AdminNav />

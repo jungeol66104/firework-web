@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useEffect, useRef, Suspense } from "react"
-import { Loader, History, Plus, ChevronDown, MoreHorizontal, MoreVertical, FileText, Trash2 } from "lucide-react"
+import { useState, useEffect, useRef, useMemo, Suspense } from "react"
+import { Loader, History, Plus, ChevronDown, MoreHorizontal, MoreVertical, FileText, Trash2, Flag } from "lucide-react"
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -18,6 +18,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import ReportModal from "@/components/interview/ReportModal"
 import { useInterviews, useStore, useRefreshTokens } from "@/lib/zustand"
 import { Interview } from "@/lib/types"
 import { createClient } from "@/lib/supabase/clients/client"
@@ -639,7 +640,12 @@ function InterviewPage() {
   }
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set())
+  const [selectedQuestions, setSelectedQuestions] = useState<Set<string>>(new Set())
+  const [selectedAnswers, setSelectedAnswers] = useState<Set<string>>(new Set())
+
+  // Combined selectedItems for backward compatibility with formatQuestionDataAsHTML
+  const selectedItems = useMemo(() => new Set([...selectedQuestions, ...selectedAnswers]), [selectedQuestions, selectedAnswers])
+
   const [showEditDropdown, setShowEditDropdown] = useState<string | null>(null)
   const [editText, setEditText] = useState<string>("")
   const [showHistoryDialog, setShowHistoryDialog] = useState<boolean>(false)
@@ -658,6 +664,7 @@ function InterviewPage() {
   // Edit/Regenerate dialog states
   const [showEditQADialog, setShowEditQADialog] = useState(false)
   const [showRegenerateQADialog, setShowRegenerateQADialog] = useState(false)
+  const [showReportModal, setShowReportModal] = useState(false)
   const [selectedQAItem, setSelectedQAItem] = useState<{
     type: 'question' | 'answer'
     category: string
@@ -674,6 +681,7 @@ function InterviewPage() {
     created_at: string
   }>>([])
   const [viewingQaId, setViewingQaId] = useState<string | null>(null)
+  const [currentQaId, setCurrentQaId] = useState<string | null>(null) // Track the current Q&A ID for reports
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isProcessingDocument, setIsProcessingDocument] = useState(false)
   const [showCreateInterviewDialog, setShowCreateInterviewDialog] = useState(false)
@@ -706,20 +714,31 @@ function InterviewPage() {
   const isPolling = hookIsPolling || isCompletingJob
 
   const handleItemClick = (itemId: string) => {
-    // Only allow selecting questions (items ending with _q_), not answers
-    if (!itemId.includes('_q_')) {
-      return
-    }
+    // Determine if it's a question or answer
+    const isQuestion = itemId.includes('_q_')
+    const isAnswer = itemId.includes('_a_')
 
-    setSelectedItems(prev => {
-      const newSet = new Set(prev)
-      if (newSet.has(itemId)) {
-        newSet.delete(itemId)
-      } else {
-        newSet.add(itemId)
-      }
-      return newSet
-    })
+    if (isQuestion) {
+      setSelectedQuestions(prev => {
+        const newSet = new Set(prev)
+        if (newSet.has(itemId)) {
+          newSet.delete(itemId)
+        } else {
+          newSet.add(itemId)
+        }
+        return newSet
+      })
+    } else if (isAnswer) {
+      setSelectedAnswers(prev => {
+        const newSet = new Set(prev)
+        if (newSet.has(itemId)) {
+          newSet.delete(itemId)
+        } else {
+          newSet.add(itemId)
+        }
+        return newSet
+      })
+    }
   }
 
   // Auto-close history panel when switching to info view
@@ -730,7 +749,10 @@ function InterviewPage() {
   }, [activeView])
 
   const handleEditClick = () => {
-    const selectedItemId = Array.from(selectedItems)[0]
+    // Get first selected item (question or answer)
+    const firstQuestion = Array.from(selectedQuestions)[0]
+    const firstAnswer = Array.from(selectedAnswers)[0]
+    const selectedItemId = firstQuestion || firstAnswer
     setShowEditDropdown(selectedItemId)
     setEditText("")
   }
@@ -989,25 +1011,25 @@ function InterviewPage() {
     if (!selectedInterview?.id) return
 
     // Validate selection
-    if (selectedItems.size === 0) {
+    if (selectedQuestions.size === 0) {
       toast.error('질문을 먼저 선택해주세요')
       return
     }
 
     try {
       // Parse selected items to extract question info
-      const selectedQuestions: Array<{category: string, index: number, text: string}> = []
+      const selectedQuestionsArray: Array<{category: string, index: number, text: string}> = []
 
-      selectedItems.forEach(itemId => {
-        // Parse itemId format: "category_q_index" or "category_a_index"
-        const match = itemId.match(/^(.+)_(q|a)_(\d+)$/)
-        if (match && match[2] === 'q') {
+      selectedQuestions.forEach(itemId => {
+        // Parse itemId format: "category_q_index"
+        const match = itemId.match(/^(.+)_q_(\d+)$/)
+        if (match) {
           const category = match[1]
-          const index = parseInt(match[3])
+          const index = parseInt(match[2])
 
           // Get question text from questionData
           if (questionData && questionData[category] && questionData[category][index]) {
-            selectedQuestions.push({
+            selectedQuestionsArray.push({
               category,
               index,
               text: questionData[category][index]
@@ -1016,7 +1038,7 @@ function InterviewPage() {
         }
       })
 
-      if (selectedQuestions.length === 0) {
+      if (selectedQuestionsArray.length === 0) {
         toast.error('유효한 질문이 선택되지 않았습니다')
         return
       }
@@ -1029,7 +1051,7 @@ function InterviewPage() {
         body: JSON.stringify({
           type: 'answers_generated',
           data: {
-            selectedQuestions,
+            selectedQuestions: selectedQuestionsArray,
             comment: generationComment
           }
         })
@@ -1040,7 +1062,7 @@ function InterviewPage() {
         setCurrentJobId(jobId)
         setShowAnswersDialog(false)
         setGenerationComment("")
-        toast.info(`답변 생성 중... ${selectedQuestions.length}개 질문 (약 60-90초 소요)`)
+        toast.info(`답변 생성 중... ${selectedQuestionsArray.length}개 질문 (약 60-90초 소요)`)
       } else {
         const error = await response.json()
 
@@ -1187,10 +1209,11 @@ function InterviewPage() {
             console.log('Received answers:', answers)
 
             // Update state smoothly without full page reload
-            // API returns array of objects with question_data/answer_data fields
+            // API returns array of objects with id and question_data/answer_data fields
             if (questions && questions.length > 0 && questions[0].question_data) {
               setQuestionData(questions[0].question_data)
-              console.log('Updated question data')
+              setCurrentQaId(questions[0].id) // Store the Q&A ID for reports
+              console.log('Updated question data with ID:', questions[0].id)
             }
 
             // For question generation/regeneration, always update answers (clears old answers)
@@ -1258,12 +1281,15 @@ function InterviewPage() {
         const questions = await questionsResponse.json()
         if (questions.length > 0) {
           setQuestionData(questions[0].question_data)
+          setCurrentQaId(questions[0].id) // Store the Q&A ID for reports
           hasData = true
         } else {
           setQuestionData(null)
+          setCurrentQaId(null)
         }
       } else {
         setQuestionData(null)
+        setCurrentQaId(null)
       }
 
       if (answersResponse.ok) {
@@ -1912,24 +1938,60 @@ function InterviewPage() {
                           <DropdownMenuItem
                             onClick={() => {
                               if (!questionData) return
-                              const allItems = new Set<string>()
+                              const allQuestions = new Set<string>()
                               // Add all question IDs
                               for (let i = 0; i < 10; i++) {
-                                allItems.add(`general_personality_q_${i}`)
-                                allItems.add(`cover_letter_personality_q_${i}`)
-                                allItems.add(`cover_letter_competency_q_${i}`)
+                                allQuestions.add(`general_personality_q_${i}`)
+                                allQuestions.add(`cover_letter_personality_q_${i}`)
+                                allQuestions.add(`cover_letter_competency_q_${i}`)
                               }
-                              setSelectedItems(allItems)
+                              setSelectedQuestions(allQuestions)
                             }}
                             className="cursor-pointer"
                           >
                             전체 질문 선택
                           </DropdownMenuItem>
                           <DropdownMenuItem
-                            onClick={() => setSelectedItems(new Set())}
+                            onClick={() => {
+                              if (!answerData) return
+                              const allAnswers = new Set<string>()
+                              // Add all answer IDs for questions that have answers
+                              const categories = ['general_personality', 'cover_letter_personality', 'cover_letter_competency']
+                              categories.forEach(category => {
+                                const answers = answerData[category] || []
+                                for (let i = 0; i < answers.length; i++) {
+                                  if (answers[i]) {
+                                    allAnswers.add(`${category}_a_${i}`)
+                                  }
+                                }
+                              })
+                              setSelectedAnswers(allAnswers)
+                            }}
+                            className="cursor-pointer"
+                            disabled={!answerData}
+                          >
+                            전체 답변 선택
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setSelectedQuestions(new Set())
+                              setSelectedAnswers(new Set())
+                            }}
                             className="cursor-pointer"
                           >
                             선택 해제
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              if (selectedItems.size > 0) {
+                                setShowReportModal(true)
+                              }
+                            }}
+                            className="cursor-pointer"
+                            disabled={selectedItems.size === 0}
+                          >
+                            <Flag className="h-4 w-4 mr-2" />
+                            문제 신고
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -1958,7 +2020,7 @@ function InterviewPage() {
                       <Button
                         className="h-8 bg-blue-600 hover:bg-blue-700 text-white relative"
                         onClick={() => setShowAnswersDialog(true)}
-                        disabled={isPolling || selectedItems.size === 0}
+                        disabled={isPolling || selectedQuestions.size === 0}
                       >
                         {isPolling && job?.type === 'answers_generated' ? (
                           <>
@@ -1968,9 +2030,9 @@ function InterviewPage() {
                         ) : (
                           <>
                             답변지 생성
-                            {selectedItems.size > 0 && (
+                            {selectedQuestions.size > 0 && (
                               <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                                {selectedItems.size}
+                                {selectedQuestions.size}
                               </span>
                             )}
                           </>
@@ -2152,7 +2214,7 @@ function InterviewPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>답변지 생성</AlertDialogTitle>
             <AlertDialogDescription>
-              {selectedItems.size}개 질문 선택됨 - {(selectedItems.size / 30 * 6).toFixed(1)} 토큰이 차감됩니다. 답변을 생성하시겠습니까?
+              {selectedQuestions.size}개 질문 선택됨 - {(selectedQuestions.size / 30 * 6).toFixed(1)} 토큰이 차감됩니다. 답변을 생성하시겠습니까?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -2335,6 +2397,22 @@ function InterviewPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Report Modal */}
+      <ReportModal
+        open={showReportModal}
+        onOpenChange={setShowReportModal}
+        selectedQuestions={selectedQuestions}
+        selectedAnswers={selectedAnswers}
+        interviewQasId={viewingQaId || currentQaId}
+        questionData={questionData}
+        answerData={answerData}
+        onSuccess={() => {
+          // Clear selections after successful report
+          setSelectedQuestions(new Set())
+          setSelectedAnswers(new Set())
+        }}
+      />
     </div>
   )
 }

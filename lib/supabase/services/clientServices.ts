@@ -1,7 +1,7 @@
 import { createClient } from '../clients/client'
-import { createInterview, deleteInterview, searchInterviewsByCandidateName, fetchInterviewById, fetchInterviews, fetchUserInterviews, getCurrentUserInterviews, getCurrentUser, checkInterviewOwnership, updateInterview, getCurrentUserProfile, updateCurrentUserProfile, deleteCurrentUserAccount, fetchInterviewQuestions, createInterviewQuestion, updateInterviewQuestion, deleteInterviewQuestion, fetchInterviewAnswers, createInterviewAnswer, updateInterviewAnswer, deleteInterviewAnswer } from './services'
+import { createInterview, deleteInterview, searchInterviewsByCandidateName, fetchInterviewById, fetchInterviews, fetchUserInterviews, getCurrentUserInterviews, getCurrentUser, checkInterviewOwnership, updateInterview, getCurrentUserProfile, updateCurrentUserProfile, deleteCurrentUserAccount, fetchInterviewQuestions, createInterviewQuestion, updateInterviewQuestion, deleteInterviewQuestion, fetchInterviewAnswers, createInterviewAnswer, updateInterviewAnswer, deleteInterviewAnswer, createReport, fetchCurrentUserReports, fetchReportById } from './services'
 import { getUserTokens } from './tokenService'
-import { CreateInterviewParams, Interview, FetchInterviewsParams, FetchInterviewsResult } from '@/lib/types'
+import { CreateInterviewParams, Interview, FetchInterviewsParams, FetchInterviewsResult, CreateReportParams, Report } from '@/lib/types'
 
 export async function createInterviewClient(
   params: CreateInterviewParams
@@ -313,4 +313,20 @@ export async function getUserActiveJobsClient(): Promise<any[]> {
 
   const result = await response.json()
   return result.jobs || []
+}
+
+// Report client services
+export async function createReportClient(params: CreateReportParams): Promise<Report> {
+  const supabase = createClient()
+  return createReport(supabase, params)
+}
+
+export async function fetchCurrentUserReportsClient(): Promise<Report[]> {
+  const supabase = createClient()
+  return fetchCurrentUserReports(supabase)
+}
+
+export async function fetchReportByIdClient(reportId: string): Promise<Report | null> {
+  const supabase = createClient()
+  return fetchReportById(supabase, reportId)
 }
