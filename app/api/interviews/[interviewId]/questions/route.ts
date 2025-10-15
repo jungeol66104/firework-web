@@ -8,6 +8,25 @@ export async function GET(
     const supabase = await createClient()
     const { interviewId } = await params
 
+    // SECURITY: Check authentication
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // SECURITY: Verify interview ownership
+    const { data: interview, error: ownershipError } = await supabase
+      .from('interviews')
+      .select('id')
+      .eq('id', interviewId)
+      .eq('user_id', user.id)
+      .single()
+
+    if (ownershipError || !interview) {
+      return Response.json({ error: 'Interview not found or access denied' }, { status: 404 })
+    }
+
+    // Fetch QA data (user is now verified as owner)
     const { data: qas, error } = await supabase
       .from('interview_qas')
       .select('*')
@@ -21,9 +40,12 @@ export async function GET(
       return Response.json({ error: 'Failed to fetch QA data' }, { status: 500 })
     }
 
-    // Return questions_data in the same format as before
+    // Return questions_data with ID for report tracking
     if (qas && qas.length > 0) {
-      return Response.json([{ question_data: qas[0].questions_data }])
+      return Response.json([{
+        id: qas[0].id,
+        question_data: qas[0].questions_data
+      }])
     }
 
     return Response.json([])
