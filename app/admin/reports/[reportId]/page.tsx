@@ -265,11 +265,11 @@ export default function ReportDetailPage() {
       if (Array.isArray(questionsData)) {
         // Direct array format
         questionsData.forEach((q: any, idx: number) => {
-          if (!q) return; // Skip null/undefined items
+          // Don't skip null items - preserve the index gaps
           questions.push({
             index: idx + 1,
             type: 'question',
-            content: typeof q === 'string' ? q : (q.question || q.content || q),
+            content: q ? (typeof q === 'string' ? q : (q.question || q.content || q)) : undefined,
             category: typeof q === 'object' ? (q.category || q.type) : undefined
           });
         });
@@ -280,12 +280,12 @@ export default function ReportDetailPage() {
 
           // Check if value is an array (category-based grouping)
           if (Array.isArray(value)) {
-            value.forEach((q: any) => {
-              if (!q) return; // Skip null/undefined items
+            value.forEach((q: any, idx: number) => {
+              // Don't skip null items - preserve the index gaps
               questions.push({
-                index: questions.length + 1,
+                index: idx, // Use the index within the category array (0-based)
                 type: 'question',
-                content: typeof q === 'string' ? q : (q.question || q.content || q),
+                content: q ? (typeof q === 'string' ? q : (q.question || q.content || q)) : undefined,
                 category: key // Use the object key as category
               });
             });
@@ -310,11 +310,11 @@ export default function ReportDetailPage() {
       if (Array.isArray(answersData)) {
         // Direct array format
         answersData.forEach((a: any, idx: number) => {
-          if (!a) return; // Skip null/undefined items
+          // Don't skip null items - preserve the index gaps
           answers.push({
             index: idx + 1,
             type: 'answer',
-            content: typeof a === 'string' ? a : (a.answer || a.content || a),
+            content: a ? (typeof a === 'string' ? a : (a.answer || a.content || a)) : undefined,
             category: typeof a === 'object' ? (a.category || a.type) : undefined
           });
         });
@@ -325,12 +325,12 @@ export default function ReportDetailPage() {
 
           // Check if value is an array (category-based grouping)
           if (Array.isArray(value)) {
-            value.forEach((a: any) => {
-              if (!a) return; // Skip null/undefined items
+            value.forEach((a: any, idx: number) => {
+              // Don't skip null items - preserve the index gaps
               answers.push({
-                index: answers.length + 1,
+                index: idx, // Use the index within the category array (0-based)
                 type: 'answer',
-                content: typeof a === 'string' ? a : (a.answer || a.content || a),
+                content: a ? (typeof a === 'string' ? a : (a.answer || a.content || a)) : undefined,
                 category: key // Use the object key as category
               });
             });
@@ -810,27 +810,9 @@ export default function ReportDetailPage() {
 
               <div>
                 <div className="font-bold text-xs text-gray-700 mb-1.5">신고 항목</div>
-                <div className="space-y-2">
-                  {report.items?.questions && report.items.questions.length > 0 && (
-                    <div>
-                      <div className="text-xs font-medium text-gray-700 mb-1">질문 ({report.items.questions.length}개)</div>
-                      <div className="text-xs text-gray-600">
-                        {report.items.questions.map((q: any, idx: number) => (
-                          <div key={idx} className="mb-0.5">• {q.id || `Question ${idx + 1}`}</div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {report.items?.answers && report.items.answers.length > 0 && (
-                    <div>
-                      <div className="text-xs font-medium text-gray-700 mb-1">답변 ({report.items.answers.length}개)</div>
-                      <div className="text-xs text-gray-600">
-                        {report.items.answers.map((a: any, idx: number) => (
-                          <div key={idx} className="mb-0.5">• {a.id || `Answer ${idx + 1}`}</div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                <div className="text-sm text-gray-900">
+                  질문 <span className="font-semibold">{report.items?.questions?.length || 0}개</span>,
+                  답변 <span className="font-semibold">{report.items?.answers?.length || 0}개</span>
                 </div>
               </div>
 

@@ -538,33 +538,67 @@ export async function createReport(
     throw new Error('Interview Q&A not found')
   }
 
+  // Fetch the actual Q&A data to validate content exists
+  const { data: qaRecord, error: qaRecordError } = await supabase
+    .from('interview_qas')
+    .select('questions_data, answers_data')
+    .eq('id', params.interview_qas_id)
+    .single()
+
+  if (qaRecordError || !qaRecord) {
+    throw new Error('Failed to fetch Q&A data for validation')
+  }
+
   // Parse selected items to create items structure
   const items: Report['items'] = {
     questions: [],
     answers: []
   }
 
-  // Parse selected questions
+  // Parse selected questions - VALIDATE content exists
   params.selectedQuestions.forEach(itemId => {
     const match = itemId.match(/^(.+)_q_(\d+)$/)
     if (match) {
-      items.questions.push({
-        category: match[1],
-        index: parseInt(match[2])
-      })
+      const category = match[1]
+      const index = parseInt(match[2])
+
+      // Validate that the question actually has content
+      const questionContent = qaRecord.questions_data?.[category]?.[index]
+      if (questionContent && typeof questionContent === 'string' && questionContent.trim().length > 0) {
+        items.questions.push({
+          category,
+          index
+        })
+      } else {
+        console.warn(`Skipping empty question at ${category}[${index}]`)
+      }
     }
   })
 
-  // Parse selected answers
+  // Parse selected answers - VALIDATE content exists
   params.selectedAnswers.forEach(itemId => {
     const match = itemId.match(/^(.+)_a_(\d+)$/)
     if (match) {
-      items.answers.push({
-        category: match[1],
-        index: parseInt(match[2])
-      })
+      const category = match[1]
+      const index = parseInt(match[2])
+
+      // Validate that the answer actually has content
+      const answerContent = qaRecord.answers_data?.[category]?.[index]
+      if (answerContent && typeof answerContent === 'string' && answerContent.trim().length > 0) {
+        items.answers.push({
+          category,
+          index
+        })
+      } else {
+        console.warn(`Skipping empty answer at ${category}[${index}]`)
+      }
     }
   })
+
+  // Ensure at least one valid item after validation
+  if (items.questions.length === 0 && items.answers.length === 0) {
+    throw new Error('No valid items to report. All selected items appear to be empty.')
+  }
 
   const { data, error } = await supabase
     .from('reports')

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef, useMemo, Suspense } from "react"
-import { Loader, History, Plus, ChevronDown, MoreHorizontal, MoreVertical, FileText, Trash2, Flag } from "lucide-react"
+import { Loader, History, Plus, ChevronDown, MoreHorizontal, MoreVertical, FileText, Trash2 } from "lucide-react"
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -85,14 +85,17 @@ const formatQuestionDataAsHTML = (
             const isQuestionSelected = selectedItems?.has(questionId) || false
             const isAnswerSelected = selectedItems?.has(answerId) || false
 
+            // Check if question has content
+            const hasQuestionContent = q && typeof q === 'string' && q.trim().length > 0
+
             return (
               <div key={i}>
                 {/* Question */}
                 <div
-                  className={`relative text-sm border-b border-gray-200 transition-colors group cursor-pointer ${
-                    isQuestionSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
-                  }`}
-                  onClick={() => handleItemClick(questionId)}
+                  className={`relative text-sm border-b border-gray-200 transition-colors group ${
+                    hasQuestionContent ? 'cursor-pointer' : 'cursor-default opacity-50'
+                  } ${isQuestionSelected ? 'bg-blue-50' : hasQuestionContent ? 'hover:bg-gray-50' : ''}`}
+                  onClick={() => hasQuestionContent && handleItemClick(questionId)}
                 >
                   <div className="px-2 py-3">
                     <div className="flex items-start gap-2">
@@ -105,7 +108,9 @@ const formatQuestionDataAsHTML = (
                           <span className="text-gray-400 leading-6">{job?.type === 'question_edited' ? '수정 중...' : '재생성 중...'}</span>
                         </div>
                       ) : (
-                        <span className="flex-1 font-medium leading-6">{q}</span>
+                        <span className={`flex-1 font-medium leading-6 ${!hasQuestionContent ? 'text-gray-400 italic' : ''}`}>
+                          {hasQuestionContent ? q : '(질문 없음)'}
+                        </span>
                       )}
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
@@ -257,14 +262,17 @@ const formatQuestionDataAsHTML = (
             const isQuestionSelected = selectedItems?.has(questionId) || false
             const isAnswerSelected = selectedItems?.has(answerId) || false
 
+            // Check if question has content
+            const hasQuestionContent = q && typeof q === 'string' && q.trim().length > 0
+
             return (
               <div key={i}>
                 {/* Question */}
                 <div
-                  className={`relative text-sm border-b border-gray-200 transition-colors group cursor-pointer ${
-                    isQuestionSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
-                  }`}
-                  onClick={() => handleItemClick(questionId)}
+                  className={`relative text-sm border-b border-gray-200 transition-colors group ${
+                    hasQuestionContent ? 'cursor-pointer' : 'cursor-default opacity-50'
+                  } ${isQuestionSelected ? 'bg-blue-50' : hasQuestionContent ? 'hover:bg-gray-50' : ''}`}
+                  onClick={() => hasQuestionContent && handleItemClick(questionId)}
                 >
                   <div className="px-2 py-3">
                     <div className="flex items-start gap-2">
@@ -277,7 +285,9 @@ const formatQuestionDataAsHTML = (
                           <span className="text-gray-400 leading-6">{job?.type === 'question_edited' ? '수정 중...' : '재생성 중...'}</span>
                         </div>
                       ) : (
-                        <span className="flex-1 font-medium leading-6">{q}</span>
+                        <span className={`flex-1 font-medium leading-6 ${!hasQuestionContent ? 'text-gray-400 italic' : ''}`}>
+                          {hasQuestionContent ? q : '(질문 없음)'}
+                        </span>
                       )}
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
@@ -429,14 +439,17 @@ const formatQuestionDataAsHTML = (
             const isQuestionSelected = selectedItems?.has(questionId) || false
             const isAnswerSelected = selectedItems?.has(answerId) || false
 
+            // Check if question has content
+            const hasQuestionContent = q && typeof q === 'string' && q.trim().length > 0
+
             return (
               <div key={i}>
                 {/* Question */}
                 <div
-                  className={`relative text-sm border-b border-gray-200 transition-colors group cursor-pointer ${
-                    isQuestionSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
-                  }`}
-                  onClick={() => handleItemClick(questionId)}
+                  className={`relative text-sm border-b border-gray-200 transition-colors group ${
+                    hasQuestionContent ? 'cursor-pointer' : 'cursor-default opacity-50'
+                  } ${isQuestionSelected ? 'bg-blue-50' : hasQuestionContent ? 'hover:bg-gray-50' : ''}`}
+                  onClick={() => hasQuestionContent && handleItemClick(questionId)}
                 >
                   <div className="px-2 py-3">
                     <div className="flex items-start gap-2">
@@ -449,7 +462,9 @@ const formatQuestionDataAsHTML = (
                           <span className="text-gray-400 leading-6">{job?.type === 'question_edited' ? '수정 중...' : '재생성 중...'}</span>
                         </div>
                       ) : (
-                        <span className="flex-1 font-medium leading-6">{q}</span>
+                        <span className={`flex-1 font-medium leading-6 ${!hasQuestionContent ? 'text-gray-400 italic' : ''}`}>
+                          {hasQuestionContent ? q : '(질문 없음)'}
+                        </span>
                       )}
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
@@ -1987,10 +2002,9 @@ function InterviewPage() {
                                 setShowReportModal(true)
                               }
                             }}
-                            className="cursor-pointer"
+                            className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
                             disabled={selectedItems.size === 0}
                           >
-                            <Flag className="h-4 w-4 mr-2" />
                             문제 신고
                           </DropdownMenuItem>
                         </DropdownMenuContent>
