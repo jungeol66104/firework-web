@@ -11,6 +11,15 @@ import {
   ResizablePanel,
   ResizableHandle,
 } from '@/components/ui/resizable';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 
 interface QAItem {
   index: number;
@@ -34,14 +43,29 @@ export default function ReportDetailPage() {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const statusDropdownRef = useRef<HTMLDivElement>(null);
+  const hasScrolledRef = useRef(false);
+  const [alertDialog, setAlertDialog] = useState<{ open: boolean; title: string; message: string }>({
+    open: false,
+    title: '',
+    message: ''
+  });
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    versionId: string | null;
+    qaKey: string | null;
+  }>({
+    open: false,
+    versionId: null,
+    qaKey: null
+  });
 
   useEffect(() => {
     fetchReportDetail();
   }, [reportId]);
 
-  // Scroll to first reported cell when data loads
+  // Scroll to first reported cell when data loads (only once on initial load)
   useEffect(() => {
-    if (data && firstReportedCellRef.current) {
+    if (data && firstReportedCellRef.current && !hasScrolledRef.current) {
       // Wait a bit for rendering to complete
       setTimeout(() => {
         firstReportedCellRef.current?.scrollIntoView({
@@ -49,6 +73,7 @@ export default function ReportDetailPage() {
           block: 'center',
           inline: 'center'
         });
+        hasScrolledRef.current = true; // Mark as scrolled
       }, 100);
     }
   }, [data]);
@@ -95,7 +120,7 @@ export default function ReportDetailPage() {
 
       if (error) {
         console.error('Error updating status:', error);
-        alert('Failed to update status');
+        setAlertDialog({ open: true, title: '오류', message: '상태 업데이트에 실패했습니다.' });
         return;
       }
 
@@ -109,16 +134,21 @@ export default function ReportDetailPage() {
       }));
     } catch (error) {
       console.error('Error updating status:', error);
-      alert('Failed to update status');
+      setAlertDialog({ open: true, title: '오류', message: '상태 업데이트에 실패했습니다.' });
     } finally {
       setUpdatingStatus(false);
     }
   };
 
-  const handleRefund = async (versionId: string, qaKey: string) => {
-    if (!confirm('정말 환불하시겠습니까?')) {
-      return;
-    }
+  const handleRefundClick = (versionId: string, qaKey: string) => {
+    setConfirmDialog({ open: true, versionId, qaKey });
+  };
+
+  const handleRefund = async () => {
+    const { versionId, qaKey } = confirmDialog;
+    if (!versionId || !qaKey) return;
+
+    setConfirmDialog({ open: false, versionId: null, qaKey: null });
 
     try {
       const supabase = createClient();
@@ -134,18 +164,24 @@ export default function ReportDetailPage() {
       // Answers: 0.2 tokens each (6 tokens / 30 answers)
       const refundAmount = isQuestion ? 0.1 : 0.2;
 
-      // Get current report data
-      const report = data.report;
+      // Find the report for this specific version
+      const targetReport = (data.allReports || []).find((r: any) => r.interview_qas_id === versionId);
 
-      // Check if this item is already refunded
-      const items = report.items;
+      if (!targetReport) {
+        setAlertDialog({ open: true, title: '오류', message: '해당 버전의 신고를 찾을 수 없습니다.' });
+        setOpenDropdown(null);
+        return;
+      }
+
+      // Check if this item is already refunded in THIS report
+      const items = targetReport.items || {};
       const itemList = isQuestion ? items.questions : items.answers;
       const existingItem = itemList?.find((item: any) =>
         item.category === category && item.index === index
       );
 
       if (existingItem?.refunded) {
-        alert('이미 환불된 항목입니다.');
+        setAlertDialog({ open: true, title: '알림', message: '이미 환불된 항목입니다.' });
         setOpenDropdown(null);
         return;
       }
@@ -180,44 +216,56 @@ export default function ReportDetailPage() {
         updatedItems[targetList].push(updatedItem);
       }
 
-      // Update report in database
+      // Update THIS report in database (not the page's report)
       const { error: updateError } = await supabase
         .from('reports')
         .update({ items: updatedItems })
-        .eq('id', reportId);
+        .eq('id', targetReport.id);
 
       if (updateError) {
         console.error('Error updating report:', updateError);
-        alert('환불 처리 중 오류가 발생했습니다.');
+        setAlertDialog({ open: true, title: '오류', message: '환불 처리 중 오류가 발생했습니다.' });
         return;
       }
 
       // Add tokens back to user using admin client
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        alert('사용자 정보를 찾을 수 없습니다.');
+        setAlertDialog({ open: true, title: '오류', message: '사용자 정보를 찾을 수 없습니다.' });
         return;
       }
 
       // Import and use addTokens from tokenService
       const { addTokens } = await import('@/lib/supabase/services/tokenService');
-      await addTokens(supabase, report.user_id, refundAmount);
+      await addTokens(supabase, targetReport.user_id, refundAmount);
 
-      // Update local state
-      setData((prev: any) => ({
-        ...prev,
-        report: {
-          ...prev.report,
-          items: updatedItems
-        }
-      }));
+      // Update local state - update the correct report in allReports
+      setData((prev: any) => {
+        const updatedAllReports = (prev.allReports || []).map((r: any) => {
+          if (r.id === targetReport.id) {
+            return { ...r, items: updatedItems };
+          }
+          return r;
+        });
 
-      alert(`환불이 완료되었습니다. (${refundAmount} 토큰)`);
+        // Also update the main report if it's the same one
+        const updatedReport = prev.report.id === targetReport.id
+          ? { ...prev.report, items: updatedItems }
+          : prev.report;
+
+        return {
+          ...prev,
+          report: updatedReport,
+          allReports: updatedAllReports
+        };
+      });
+
+      setAlertDialog({ open: true, title: '성공', message: `환불이 완료되었습니다. (${refundAmount} 토큰)` });
       setOpenDropdown(null);
 
     } catch (error) {
       console.error('Error processing refund:', error);
-      alert('환불 처리에 실패했습니다.');
+      setAlertDialog({ open: true, title: '오류', message: '환불 처리에 실패했습니다.' });
     }
   };
 
@@ -236,7 +284,7 @@ export default function ReportDetailPage() {
 
       if (error) {
         console.error('Error saving admin response:', error);
-        alert('Failed to save admin response');
+        setAlertDialog({ open: true, title: '오류', message: '관리자 응답 저장에 실패했습니다.' });
         return;
       }
 
@@ -249,10 +297,10 @@ export default function ReportDetailPage() {
         }
       }));
 
-      alert('관리자 응답이 저장되었습니다.');
+      setAlertDialog({ open: true, title: '성공', message: '관리자 응답이 저장되었습니다.' });
     } catch (error) {
       console.error('Error saving admin response:', error);
-      alert('Failed to save admin response');
+      setAlertDialog({ open: true, title: '오류', message: '관리자 응답 저장에 실패했습니다.' });
     } finally {
       setSavingResponse(false);
     }
@@ -759,7 +807,7 @@ export default function ReportDetailPage() {
                                       <button
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          handleRefund(version.id, row.qaKey);
+                                          handleRefundClick(version.id, row.qaKey);
                                         }}
                                         disabled={isRefunded}
                                         className={`w-full px-4 py-2 text-left text-sm ${
@@ -927,6 +975,42 @@ export default function ReportDetailPage() {
           </div>
         </div>
       </ResizablePanel>
+
+      {/* Alert Dialog */}
+      <Dialog open={alertDialog.open} onOpenChange={(open) => setAlertDialog({ ...alertDialog, open })}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{alertDialog.title}</DialogTitle>
+            <DialogDescription>{alertDialog.message}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setAlertDialog({ ...alertDialog, open: false })}>
+              확인
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirm Dialog */}
+      <Dialog open={confirmDialog.open} onOpenChange={(open) => setConfirmDialog({ ...confirmDialog, open })}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>환불 확인</DialogTitle>
+            <DialogDescription>정말 환불하시겠습니까?</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setConfirmDialog({ open: false, versionId: null, qaKey: null })}
+            >
+              취소
+            </Button>
+            <Button onClick={handleRefund}>
+              환불
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </ResizablePanelGroup>
   );
 }
