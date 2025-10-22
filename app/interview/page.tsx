@@ -655,6 +655,7 @@ function InterviewPage() {
   }
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [isStartingGeneration, setIsStartingGeneration] = useState(false)
   const [selectedQuestions, setSelectedQuestions] = useState<Set<string>>(new Set())
   const [selectedAnswers, setSelectedAnswers] = useState<Set<string>>(new Set())
 
@@ -727,6 +728,13 @@ function InterviewPage() {
   const { job, isPolling: hookIsPolling } = useJobPolling(currentJobId)
   // Keep showing loaders during completion until data is fetched
   const isPolling = hookIsPolling || isCompletingJob
+
+  // Reset isStartingGeneration when we have the job data
+  useEffect(() => {
+    if (hookIsPolling && job?.type === 'questions_generated') {
+      setIsStartingGeneration(false)
+    }
+  }, [hookIsPolling, job])
 
   const handleItemClick = (itemId: string) => {
     // Determine if it's a question or answer
@@ -986,7 +994,29 @@ function InterviewPage() {
   const handleGenerateQuestions = async () => {
     if (!selectedInterview?.id) return
 
+    // Validate required fields
+    const hasJobPosting = selectedInterview.job_posting && selectedInterview.job_posting.trim() !== ""
+    const hasCoverLetter = selectedInterview.cover_letter && selectedInterview.cover_letter.trim() !== ""
+    const hasResume = selectedInterview.resume && selectedInterview.resume.trim() !== ""
+    const hasCompanyInfo = selectedInterview.company_info && selectedInterview.company_info.trim() !== ""
+
+    const missingFields = []
+    if (!hasJobPosting) missingFields.push('채용 공고')
+    if (!hasCoverLetter) missingFields.push('자기소개서')
+    if (!hasResume) missingFields.push('이력서')
+    if (!hasCompanyInfo) missingFields.push('기업정보')
+
+    if (missingFields.length > 0) {
+      toast.error(
+        `질문 생성을 위해 다음 필수 정보를 입력해주세요:\n${missingFields.join(', ')}`,
+        { duration: 5000 }
+      )
+      setShowQuestionsDialog(false)
+      return
+    }
+
     try {
+      setIsStartingGeneration(true)
       const response = await fetch(`/api/interviews/${selectedInterview.id}/qa`, {
         method: 'POST',
         headers: {
@@ -1000,11 +1030,15 @@ function InterviewPage() {
 
       if (response.ok) {
         const { jobId } = await response.json()
+        // Clear old data to show loader
+        setQuestionData(null)
+        setAnswerData(null)
         setCurrentJobId(jobId)
         setShowQuestionsDialog(false)
         toast.info('질문 생성 중... (약 60-90초 소요)')
       } else {
         const error = await response.json()
+        setIsStartingGeneration(false)
 
         // Handle insufficient tokens
         if (error.error === 'INSUFFICIENT_TOKENS') {
@@ -1019,6 +1053,7 @@ function InterviewPage() {
     } catch (error) {
       console.error('Error generating questions:', error)
       toast.error('질문 생성 중 오류가 발생했습니다')
+      setIsStartingGeneration(false)
     }
   }
 
@@ -1252,6 +1287,12 @@ function InterviewPage() {
               // For answer operations, just update normally
               setAnswerData(answers[0].answer_data)
               console.log('Updated answer data')
+
+              // Clear selected questions after answer generation completes
+              if (job?.type === 'answers_generated') {
+                setSelectedQuestions(new Set())
+                console.log('Cleared selected questions after answer generation')
+              }
             }
 
             // Only NOW clear the job and completing flag - data is ready, smooth transition!
@@ -1709,31 +1750,17 @@ function InterviewPage() {
                           <div className="flex items-center justify-center h-full">
                             <Loader className="h-4 w-4 animate-spin text-black" />
                           </div>
-                        ) : error ? (
-                          <div className="flex flex-col items-center justify-center h-full gap-3">
-                            <p className="text-gray-500 text-center text-sm">
-                              아직 생성된 질문지가 없습니다.<br />
-                              질문지를 생성하여 면접을 준비해보세요.
-                            </p>
-                            <Button
-                              variant="outline"
-                              className="h-8 text-sm"
-                              onClick={() => setShowQuestionsDialog(true)}
-                            >
-                              질문지 생성
-                            </Button>
-                          </div>
-                        ) : isPolling && job?.type === 'questions_generated' && !questionData ? (
+                        ) : (isPolling && job?.type === 'questions_generated' && !questionData) || isStartingGeneration ? (
                           // Generating 30 questions - show skeleton loaders
                           <div>
                             <div className="mb-0">
                               <h3 className="font-bold text-sm mb-0 px-4 py-3 bg-gray-50 border-b border-gray-200 sticky top-0 z-10">일반 인성면접 질문 (10개)</h3>
                               <div>
                                 {Array.from({ length: 10 }, (_, i) => (
-                                  <div key={i} className="px-2 py-3 border-b border-gray-200 flex items-start gap-2">
-                                    <span className="w-6 flex-shrink-0 text-gray-400">{i + 1}.</span>
-                                    <Loader className="h-4 w-4 animate-spin text-gray-400" />
-                                    <span className="text-gray-400 leading-6">질문 생성 중...</span>
+                                  <div key={i} className="px-2 py-3 border-b border-gray-200 flex items-center gap-2 text-sm">
+                                    <span className="w-6 flex-shrink-0 font-medium text-gray-400">{i + 1}.</span>
+                                    <Loader className="h-4 w-4 flex-shrink-0 animate-spin text-gray-400" />
+                                    <span className="text-gray-400 font-medium leading-6">질문 생성 중...</span>
                                   </div>
                                 ))}
                               </div>
@@ -1742,10 +1769,10 @@ function InterviewPage() {
                               <h3 className="font-bold text-sm mb-0 px-4 py-3 bg-gray-50 border-b border-gray-200 sticky top-0 z-10">자기소개서 기반 인성면접 질문 (10개)</h3>
                               <div>
                                 {Array.from({ length: 10 }, (_, i) => (
-                                  <div key={i} className="px-2 py-3 border-b border-gray-200 flex items-start gap-2">
-                                    <span className="w-6 flex-shrink-0 text-gray-400">{i + 1}.</span>
-                                    <Loader className="h-4 w-4 animate-spin text-gray-400" />
-                                    <span className="text-gray-400 leading-6">질문 생성 중...</span>
+                                  <div key={i} className="px-2 py-3 border-b border-gray-200 flex items-center gap-2 text-sm">
+                                    <span className="w-6 flex-shrink-0 font-medium text-gray-400">{i + 1}.</span>
+                                    <Loader className="h-4 w-4 flex-shrink-0 animate-spin text-gray-400" />
+                                    <span className="text-gray-400 font-medium leading-6">질문 생성 중...</span>
                                   </div>
                                 ))}
                               </div>
@@ -1754,10 +1781,10 @@ function InterviewPage() {
                               <h3 className="font-bold text-sm mb-0 px-4 py-3 bg-gray-50 border-b border-gray-200 sticky top-0 z-10">자기소개서 기반 직무 역량 확인 질문 (10개)</h3>
                               <div>
                                 {Array.from({ length: 10 }, (_, i) => (
-                                  <div key={i} className="px-2 py-3 border-b border-gray-200 flex items-start gap-2">
-                                    <span className="w-6 flex-shrink-0 text-gray-400">{i + 1}.</span>
-                                    <Loader className="h-4 w-4 animate-spin text-gray-400" />
-                                    <span className="text-gray-400 leading-6">질문 생성 중...</span>
+                                  <div key={i} className="px-2 py-3 border-b border-gray-200 flex items-center gap-2 text-sm">
+                                    <span className="w-6 flex-shrink-0 font-medium text-gray-400">{i + 1}.</span>
+                                    <Loader className="h-4 w-4 flex-shrink-0 animate-spin text-gray-400" />
+                                    <span className="text-gray-400 font-medium leading-6">질문 생성 중...</span>
                                   </div>
                                 ))}
                               </div>
@@ -1828,17 +1855,25 @@ function InterviewPage() {
                         <div className="flex-1 overflow-y-auto min-h-0 flex flex-col">
                           <Table className="flex-1">
                             <TableHeader>
-                              <TableRow className="h-11">
-                                <TableHead className="text-sm px-2 py-3">이름</TableHead>
-                                <TableHead className="text-sm px-2 py-3">변경사항</TableHead>
-                                <TableHead className="text-sm px-2 py-3">날짜</TableHead>
-                                <TableHead className="text-sm px-2 py-3 w-12"></TableHead>
+                              <TableRow>
+                                <TableHead className="text-sm font-medium leading-6 h-auto p-0">
+                                  <div className="px-2 py-3">이름</div>
+                                </TableHead>
+                                <TableHead className="text-sm font-medium leading-6 h-auto p-0">
+                                  <div className="px-2 py-3">변경사항</div>
+                                </TableHead>
+                                <TableHead className="text-sm font-medium leading-6 h-auto p-0">
+                                  <div className="px-2 py-3">날짜</div>
+                                </TableHead>
+                                <TableHead className="text-sm font-medium leading-6 h-auto p-0 w-12">
+                                  <div className="px-2 py-3"></div>
+                                </TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
                               {qaHistory.length === 0 ? (
                                 <TableRow>
-                                  <TableCell colSpan={4} className="text-center text-sm text-gray-500 py-8 h-20">
+                                  <TableCell colSpan={4} className="text-center text-sm text-gray-500 py-8">
                                     히스토리가 없습니다
                                   </TableCell>
                                 </TableRow>
@@ -1858,28 +1893,39 @@ function InterviewPage() {
                                   return (
                                     <TableRow
                                       key={qa.id}
-                                      className={`cursor-pointer transition-colors h-11 ${
+                                      className={`cursor-pointer transition-colors ${
                                         selectedHistoryId === qa.id ? 'bg-blue-50' : 'hover:bg-gray-50'
                                       } ${isLastItem ? '[&>td]:border-b' : ''}`}
                                       onClick={() => loadQaVersion(qa.id)}
                                     >
-                                      <TableCell className="text-sm px-2 py-3">
-                                        <div className="flex items-center gap-2">
-                                          {qa.name}
-                                          {qa.is_default && (
-                                            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">기본</span>
-                                          )}
+                                      <TableCell className="text-sm font-medium leading-6 px-2 py-3 h-auto p-0 align-top">
+                                        <div className="px-2 py-3">
+                                          <div className="flex items-center gap-2 leading-6">
+                                            <span className="font-medium leading-6">{qa.name}</span>
+                                            {qa.is_default && (
+                                              <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">기본</span>
+                                            )}
+                                          </div>
                                         </div>
                                       </TableCell>
-                                      <TableCell className="text-sm px-2 py-3">{typeLabel}</TableCell>
-                                      <TableCell className="text-sm px-2 py-3">{formattedDate}</TableCell>
-                                      <TableCell className="text-sm px-2 py-3">
+                                      <TableCell className="text-sm font-medium leading-6 px-2 py-3 h-auto p-0 align-top">
+                                        <div className="px-2 py-3">
+                                          <span className="font-medium leading-6">{typeLabel}</span>
+                                        </div>
+                                      </TableCell>
+                                      <TableCell className="text-sm font-medium leading-6 px-2 py-3 h-auto p-0 align-top">
+                                        <div className="px-2 py-3">
+                                          <span className="font-medium leading-6">{formattedDate}</span>
+                                        </div>
+                                      </TableCell>
+                                      <TableCell className="text-sm font-medium leading-6 px-2 py-3 h-auto p-0 align-top">
+                                        <div className="px-2 py-3 flex items-start">
                                         <DropdownMenu>
                                           <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                                             <Button
                                               variant="ghost"
                                               size="sm"
-                                              className="h-6 w-6 p-0 text-gray-300 hover:text-black hover:bg-transparent"
+                                              className="h-6 w-6 p-0 flex-shrink-0 text-gray-300 hover:text-black hover:bg-transparent"
                                             >
                                               <MoreVertical className="h-4 w-4" />
                                             </Button>
@@ -1908,6 +1954,7 @@ function InterviewPage() {
                                             )}
                                           </DropdownMenuContent>
                                         </DropdownMenu>
+                                        </div>
                                       </TableCell>
                                     </TableRow>
                                   )
@@ -1953,48 +2000,91 @@ function InterviewPage() {
                           <DropdownMenuItem
                             onClick={() => {
                               if (!questionData) return
-                              const allQuestions = new Set<string>()
-                              // Add all question IDs
-                              for (let i = 0; i < 10; i++) {
-                                allQuestions.add(`general_personality_q_${i}`)
-                                allQuestions.add(`cover_letter_personality_q_${i}`)
-                                allQuestions.add(`cover_letter_competency_q_${i}`)
+
+                              // Check if all questions are selected (30 total: 10 per category × 3 categories)
+                              const allQuestionsSelected = selectedQuestions.size === 30
+
+                              if (allQuestionsSelected) {
+                                // Deselect all questions
+                                setSelectedQuestions(new Set())
+                              } else {
+                                // Select all questions
+                                const allQuestions = new Set<string>()
+                                for (let i = 0; i < 10; i++) {
+                                  allQuestions.add(`general_personality_q_${i}`)
+                                  allQuestions.add(`cover_letter_personality_q_${i}`)
+                                  allQuestions.add(`cover_letter_competency_q_${i}`)
+                                }
+                                setSelectedQuestions(allQuestions)
                               }
-                              setSelectedQuestions(allQuestions)
                             }}
-                            className="cursor-pointer"
+                            className={`cursor-pointer ${selectedQuestions.size === 30 ? 'bg-blue-50 text-blue-600 focus:bg-blue-100 focus:text-blue-600' : ''}`}
                           >
-                            전체 질문 선택
+                            {selectedQuestions.size === 30 ? '전체 질문 해제' : '전체 질문 선택'}
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => {
                               if (!answerData) return
-                              const allAnswers = new Set<string>()
-                              // Add all answer IDs for questions that have answers
+
+                              // Count total available answers
                               const categories = ['general_personality', 'cover_letter_personality', 'cover_letter_competency']
+                              let totalAnswers = 0
+                              const allAnswers = new Set<string>()
+
                               categories.forEach(category => {
                                 const answers = answerData[category] || []
                                 for (let i = 0; i < answers.length; i++) {
                                   if (answers[i]) {
+                                    totalAnswers++
                                     allAnswers.add(`${category}_a_${i}`)
                                   }
                                 }
                               })
-                              setSelectedAnswers(allAnswers)
+
+                              // Check if all answers are selected
+                              const allAnswersSelected = selectedAnswers.size === totalAnswers
+
+                              if (allAnswersSelected) {
+                                // Deselect all answers
+                                setSelectedAnswers(new Set())
+                              } else {
+                                // Select all answers
+                                setSelectedAnswers(allAnswers)
+                              }
                             }}
-                            className="cursor-pointer"
+                            className={(() => {
+                              if (!answerData) return 'cursor-pointer'
+
+                              // Count total available answers for styling
+                              const categories = ['general_personality', 'cover_letter_personality', 'cover_letter_competency']
+                              let totalAnswers = 0
+                              categories.forEach(category => {
+                                const answers = answerData[category] || []
+                                for (let i = 0; i < answers.length; i++) {
+                                  if (answers[i]) totalAnswers++
+                                }
+                              })
+
+                              const allSelected = selectedAnswers.size === totalAnswers && totalAnswers > 0
+                              return `cursor-pointer ${allSelected ? 'bg-blue-50 text-blue-600 focus:bg-blue-100 focus:text-blue-600' : ''}`
+                            })()}
                             disabled={!answerData}
                           >
-                            전체 답변 선택
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => {
-                              setSelectedQuestions(new Set())
-                              setSelectedAnswers(new Set())
-                            }}
-                            className="cursor-pointer"
-                          >
-                            선택 해제
+                            {(() => {
+                              if (!answerData) return '전체 답변 선택'
+
+                              // Count total available answers for display
+                              const categories = ['general_personality', 'cover_letter_personality', 'cover_letter_competency']
+                              let totalAnswers = 0
+                              categories.forEach(category => {
+                                const answers = answerData[category] || []
+                                for (let i = 0; i < answers.length; i++) {
+                                  if (answers[i]) totalAnswers++
+                                }
+                              })
+
+                              return selectedAnswers.size === totalAnswers && totalAnswers > 0 ? '전체 답변 해제' : '전체 답변 선택'
+                            })()}
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => {
@@ -2106,31 +2196,17 @@ function InterviewPage() {
                     <div className="flex items-center justify-center h-full">
                       <Loader className="h-4 w-4 animate-spin text-black" />
                     </div>
-                  ) : error ? (
-                    <div className="flex flex-col items-center justify-center h-full gap-3">
-                      <p className="text-gray-500 text-center text-sm">
-                        아직 생성된 질문지가 없습니다.<br />
-                        질문지를 생성하여 면접을 준비해보세요.
-                      </p>
-                      <Button
-                        variant="outline"
-                        className="h-8 text-sm"
-                        onClick={() => setShowQuestionsDialog(true)}
-                      >
-                        질문지 생성
-                      </Button>
-                    </div>
-                  ) : isPolling && job?.type === 'questions_generated' && !questionData ? (
+                  ) : (isPolling && job?.type === 'questions_generated' && !questionData) || isStartingGeneration ? (
                     // Generating 30 questions - show skeleton loaders
                     <div>
                       <div className="mb-0">
                         <h3 className="font-bold text-sm mb-0 px-4 py-3 bg-gray-50 border-b border-gray-200 sticky top-0 z-10">일반 인성면접 질문 (10개)</h3>
                         <div>
                           {Array.from({ length: 10 }, (_, i) => (
-                            <div key={i} className="px-2 py-3 border-b border-gray-200 flex items-start gap-2">
-                              <span className="w-6 flex-shrink-0 text-gray-400">{i + 1}.</span>
-                              <Loader className="h-4 w-4 animate-spin text-gray-400" />
-                              <span className="text-gray-400 leading-6">질문 생성 중...</span>
+                            <div key={i} className="px-2 py-3 border-b border-gray-200 flex items-center gap-2 text-sm">
+                              <span className="w-6 flex-shrink-0 font-medium text-gray-400">{i + 1}.</span>
+                              <Loader className="h-4 w-4 flex-shrink-0 animate-spin text-gray-400" />
+                              <span className="text-gray-400 font-medium leading-6">질문 생성 중...</span>
                             </div>
                           ))}
                         </div>
@@ -2139,10 +2215,10 @@ function InterviewPage() {
                         <h3 className="font-bold text-sm mb-0 px-4 py-3 bg-gray-50 border-b border-gray-200 sticky top-0 z-10">자소서 기반 인성면접 질문 (10개)</h3>
                         <div>
                           {Array.from({ length: 10 }, (_, i) => (
-                            <div key={i} className="px-2 py-3 border-b border-gray-200 flex items-start gap-2">
-                              <span className="w-6 flex-shrink-0 text-gray-400">{i + 11}.</span>
-                              <Loader className="h-4 w-4 animate-spin text-gray-400" />
-                              <span className="text-gray-400 leading-6">질문 생성 중...</span>
+                            <div key={i} className="px-2 py-3 border-b border-gray-200 flex items-center gap-2 text-sm">
+                              <span className="w-6 flex-shrink-0 font-medium text-gray-400">{i + 11}.</span>
+                              <Loader className="h-4 w-4 flex-shrink-0 animate-spin text-gray-400" />
+                              <span className="text-gray-400 font-medium leading-6">질문 생성 중...</span>
                             </div>
                           ))}
                         </div>
@@ -2151,10 +2227,10 @@ function InterviewPage() {
                         <h3 className="font-bold text-sm mb-0 px-4 py-3 bg-gray-50 border-b border-gray-200 sticky top-0 z-10">자소서 기반 역량면접 질문 (10개)</h3>
                         <div>
                           {Array.from({ length: 10 }, (_, i) => (
-                            <div key={i} className="px-2 py-3 border-b border-gray-200 flex items-start gap-2">
-                              <span className="w-6 flex-shrink-0 text-gray-400">{i + 21}.</span>
-                              <Loader className="h-4 w-4 animate-spin text-gray-400" />
-                              <span className="text-gray-400 leading-6">질문 생성 중...</span>
+                            <div key={i} className="px-2 py-3 border-b border-gray-200 flex items-center gap-2 text-sm">
+                              <span className="w-6 flex-shrink-0 font-medium text-gray-400">{i + 21}.</span>
+                              <Loader className="h-4 w-4 flex-shrink-0 animate-spin text-gray-400" />
+                              <span className="text-gray-400 font-medium leading-6">질문 생성 중...</span>
                             </div>
                           ))}
                         </div>
@@ -2368,18 +2444,12 @@ function InterviewPage() {
       }}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle className="text-red-600">면접 삭제</DialogTitle>
+            <DialogTitle>면접 삭제</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="text-sm text-gray-700">
-              <p className="mb-2">
-                <strong>{selectedInterview?.company_name} - {selectedInterview?.position}</strong> 면접을 삭제하시겠습니까?
-              </p>
-              <p className="text-red-600 font-medium mb-2">
-                모든 질문과 답변이 영구적으로 삭제되며 복구할 수 없습니다.
-              </p>
               <p>
-                계속하려면 아래에 <strong className="text-red-600">삭제</strong>를 입력하세요.
+                {selectedInterview?.company_name} - {selectedInterview?.position} 면접을 삭제하시겠습니까? 모든 질문과 답변이 영구적으로 삭제되며 복구할 수 없습니다. 계속하려면 아래에 <strong className="text-red-600">삭제</strong>를 입력하세요.
               </p>
             </div>
             <Input

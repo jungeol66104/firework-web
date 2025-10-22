@@ -498,8 +498,30 @@ export default function ReportDetailPage() {
     Object.keys(categoryGroups).forEach(cat => allCategories.add(cat));
   });
 
+  // Define the correct category order
+  const categoryOrder = [
+    'general_personality',
+    'cover_letter_personality',
+    'cover_letter_competency',
+    'technical',
+    'situational',
+    'behavioral',
+    'uncategorized'
+  ];
+
+  // Sort categories according to the defined order
+  const sortedCategories = Array.from(allCategories).sort((a, b) => {
+    const indexA = categoryOrder.indexOf(a);
+    const indexB = categoryOrder.indexOf(b);
+    // If category not in order list, put it at the end
+    if (indexA === -1 && indexB === -1) return a.localeCompare(b);
+    if (indexA === -1) return 1;
+    if (indexB === -1) return -1;
+    return indexA - indexB;
+  });
+
   // For each category, create category row + paired Q&A rows
-  Array.from(allCategories).forEach((category, catIdx) => {
+  sortedCategories.forEach((category, catIdx) => {
     // Add category header row
     rows.push({
       type: 'category',
@@ -670,26 +692,32 @@ export default function ReportDetailPage() {
                             }}
                           >
                             {item && item.content ? (
-                              <>
-                                {/* Refunded badge - show at top left if refunded */}
+                              <div className="flex items-start gap-2">
+                                {/* Refunded badge - show at left if refunded */}
                                 {isRefunded && (
-                                  <div className="absolute top-2 left-2 px-2 py-0.5 bg-green-500 text-white text-xs font-medium rounded">
+                                  <div className="px-2 py-0.5 bg-green-500 text-white text-xs font-medium rounded flex-shrink-0">
                                     환불완료
                                   </div>
                                 )}
-                                <div className={`text-xs text-gray-700 whitespace-pre-wrap pr-6 ${isRefunded ? 'mt-6' : ''}`}>
+                                <div className="flex-1 text-xs text-gray-700 whitespace-pre-wrap">
                                   {item.content}
                                 </div>
-                                {/* More button - show on hover or when dropdown is open */}
-                                <div className={`absolute top-2 right-2 ${isDropdownOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity`}>
+                                {/* More button - only visible for reported items, styled like interview page */}
+                                <div className="relative flex-shrink-0">
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      setOpenDropdown(isDropdownOpen ? null : { versionId: version.id, qaKey: row.qaKey });
+                                      if (isReported) {
+                                        setOpenDropdown(isDropdownOpen ? null : { versionId: version.id, qaKey: row.qaKey });
+                                      }
                                     }}
-                                    className="p-1 rounded hover:bg-gray-200 transition-colors"
+                                    className={`h-6 w-6 p-0 flex-shrink-0 flex items-center justify-center ${
+                                      isReported
+                                        ? 'text-gray-300 group-hover:text-black hover:bg-transparent cursor-pointer'
+                                        : 'invisible'
+                                    } transition-colors`}
                                   >
-                                    <MoreVertical className="h-4 w-4 text-gray-600" />
+                                    <MoreVertical className="h-4 w-4" />
                                   </button>
                                   {/* Dropdown menu */}
                                   {isDropdownOpen && (
@@ -714,7 +742,7 @@ export default function ReportDetailPage() {
                                     </div>
                                   )}
                                 </div>
-                              </>
+                              </div>
                             ) : (
                               <div className="text-gray-400 text-center">-</div>
                             )}

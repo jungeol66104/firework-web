@@ -8,7 +8,8 @@ import { getCurrentUserClient, getCurrentUserProfileClient } from "@/lib/supabas
 import { useTokens, useRefreshTokens } from "@/lib/zustand";
 import { usePaymentPopup } from "@/hooks/usePaymentPopup";
 import { User } from "@supabase/supabase-js";
-import { Profile } from "@/lib/types";
+import { Profile, Interview } from "@/lib/types";
+import { CreateInterviewButton } from "@/components/createInterviewButton";
 
 interface NavBarProps {
   children?: React.ReactNode
@@ -18,7 +19,7 @@ export const NavBar: React.FC<NavBarProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
-  
+
   // Global token state
   const tokens = useTokens();
   const refreshTokens = useRefreshTokens();
@@ -49,15 +50,20 @@ export const NavBar: React.FC<NavBarProps> = ({ children }) => {
     fetchUserData();
   }, []);
 
+  const handleInterviewCreated = (interview: Interview) => {
+    // Use window.location.href for hard navigation to ensure page reload
+    window.location.href = `/interview?id=${interview.id}`;
+  };
+
   return (
-    <div className="sticky top-0 z-10 w-full max-w-4xl mx-auto bg-white/40 backdrop-blur-sm">
+    <div className="sticky top-0 z-50 w-full max-w-4xl mx-auto bg-white/40 backdrop-blur-sm">
       <div className="h-[60px] px-4 flex items-center justify-between">
         <Link href="/interview" className="text-lg font-bold">
           빅토리 포뮬러
         </Link>
       
       {!loading && user && profile && (
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <Link href="/dashboard">
             <Button variant="ghost" size="sm" className="sm:px-3 px-0 sm:hover:bg-gray-100 hover:bg-transparent">
               {/* Mobile: First letter with border */}
@@ -81,17 +87,24 @@ export const NavBar: React.FC<NavBarProps> = ({ children }) => {
             </div>
             <span className="text-sm text-gray-600">{tokens.toLocaleString('ko-KR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
           </div>
-          <Button 
-            className="bg-blue-600 hover:bg-blue-700 text-white sm:px-3 sm:py-1 sm:h-8 sm:w-auto w-8 h-8 p-0 text-sm flex items-center justify-center gap-2"
-            onClick={() => {
-              openPaymentPopup({
-                onClose: () => refreshTokens() // Refresh global token state
-              })
-            }}
-          >
-            <CreditCard className="w-4 h-4 sm:hidden" />
-            <span className="hidden sm:inline">충전하기</span>
-          </Button>
+          <div className="flex items-center gap-3 ml-1">
+            <Button
+              className="bg-blue-600 hover:bg-blue-700 text-white sm:px-3 sm:py-1 sm:h-8 sm:w-auto w-8 h-8 p-0 text-sm flex items-center justify-center gap-2"
+              onClick={() => {
+                openPaymentPopup({
+                  onClose: () => refreshTokens() // Refresh global token state
+                })
+              }}
+            >
+              <CreditCard className="w-4 h-4 sm:hidden" />
+              <span className="hidden sm:inline">충전하기</span>
+            </Button>
+            <CreateInterviewButton
+              className="border-gray-300 text-gray-700 hover:bg-gray-100"
+              size="sm"
+              onInterviewCreated={handleInterviewCreated}
+            />
+          </div>
         </div>
       )}
       </div>
