@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Loader, MoreVertical } from 'lucide-react';
+import { Loader, MoreVertical, ChevronDown } from 'lucide-react';
 import { createClient } from '@/lib/supabase/clients/client';
 import { getReportDetailWithVersions } from '@/lib/admin/adminServices';
 import { useParams } from 'next/navigation';
@@ -32,6 +32,8 @@ export default function ReportDetailPage() {
   const [selectedCell, setSelectedCell] = useState<{ versionId: string; qaKey: string } | null>(null);
   const [openDropdown, setOpenDropdown] = useState<{ versionId: string; qaKey: string } | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+  const statusDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchReportDetail();
@@ -56,6 +58,9 @@ export default function ReportDetailPage() {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setOpenDropdown(null);
+      }
+      if (statusDropdownRef.current && !statusDropdownRef.current.contains(event.target as Node)) {
+        setShowStatusDropdown(false);
       }
     };
 
@@ -427,57 +432,78 @@ export default function ReportDetailPage() {
     );
   }
 
-  const { report, qaVersions } = data;
+  const { report, qaVersions, allReports } = data;
 
-  // Get the specific version ID that was reported
+  // Get the specific version ID that was reported (for current report)
   const reportedVersionId = report.interview_qas_id;
 
-  // Get reported item indices and refunded items
-  const reportedItems = new Set<string>();
+  // Build a comprehensive map of all reported and refunded items across ALL reports
+  // Map structure: versionId -> qaKey -> { isReported: boolean, isRefunded: boolean, refundInfo: {...} }
+  const allReportedItems = new Map<string, Map<string, { isReported: boolean; isRefunded: boolean; refundInfo?: { refund_amount: number; refunded_at: string } }>>();
+
+  // Process all reports
+  (allReports || []).forEach((r: any) => {
+    const versionId = r.interview_qas_id;
+    if (!versionId) return;
+
+    // Initialize map for this version if not exists
+    if (!allReportedItems.has(versionId)) {
+      allReportedItems.set(versionId, new Map());
+    }
+    const versionMap = allReportedItems.get(versionId)!;
+
+    if (r.items) {
+      // Process reported questions
+      if (r.items.questions && Array.isArray(r.items.questions)) {
+        r.items.questions.forEach((q: any) => {
+          const category = q.category || 'uncategorized';
+          const index = q.index || q.question_index || 0;
+          const key = `q-${category}-${index}`;
+
+          versionMap.set(key, {
+            isReported: true,
+            isRefunded: !!q.refunded,
+            refundInfo: q.refunded ? {
+              refund_amount: q.refund_amount || 0,
+              refunded_at: q.refunded_at || ''
+            } : undefined
+          });
+        });
+      }
+
+      // Process reported answers
+      if (r.items.answers && Array.isArray(r.items.answers)) {
+        r.items.answers.forEach((a: any) => {
+          const category = a.category || 'uncategorized';
+          const index = a.index || a.answer_index || 0;
+          const key = `a-${category}-${index}`;
+
+          versionMap.set(key, {
+            isReported: true,
+            isRefunded: !!a.refunded,
+            refundInfo: a.refunded ? {
+              refund_amount: a.refund_amount || 0,
+              refunded_at: a.refunded_at || ''
+            } : undefined
+          });
+        });
+      }
+    }
+  });
+
+  // For backward compatibility - get reported items for the current report's version
+  const reportedItems = allReportedItems.get(reportedVersionId) || new Map();
   const refundedItems = new Map<string, { refund_amount: number; refunded_at: string }>();
-
-  if (report.items) {
-    // Add reported questions
-    if (report.items.questions && Array.isArray(report.items.questions)) {
-      report.items.questions.forEach((q: any) => {
-        const category = q.category || 'uncategorized';
-        const index = q.index || q.question_index || 0;
-        const key = `q-${category}-${index}`;
-        reportedItems.add(key);
-
-        // Track refunded items
-        if (q.refunded) {
-          refundedItems.set(key, {
-            refund_amount: q.refund_amount || 0,
-            refunded_at: q.refunded_at || ''
-          });
-        }
-      });
+  reportedItems.forEach((info, key) => {
+    if (info.isRefunded && info.refundInfo) {
+      refundedItems.set(key, info.refundInfo);
     }
+  });
 
-    // Add reported answers
-    if (report.items.answers && Array.isArray(report.items.answers)) {
-      report.items.answers.forEach((a: any) => {
-        const category = a.category || 'uncategorized';
-        const index = a.index || a.answer_index || 0;
-        const key = `a-${category}-${index}`;
-        reportedItems.add(key);
-
-        // Track refunded items
-        if (a.refunded) {
-          refundedItems.set(key, {
-            refund_amount: a.refund_amount || 0,
-            refunded_at: a.refunded_at || ''
-          });
-        }
-      });
-    }
-  }
-
-  // Find the first reported cell for auto-scroll
+  // Find the first reported cell for auto-scroll (from current report only)
   let firstReportedCell: { versionId: string; qaKey: string } | null = null;
   if (reportedItems.size > 0 && reportedVersionId) {
-    const firstQaKey = Array.from(reportedItems)[0];
+    const firstQaKey = Array.from(reportedItems.keys())[0];
     firstReportedCell = {
       versionId: reportedVersionId,
       qaKey: firstQaKey
@@ -583,26 +609,33 @@ export default function ReportDetailPage() {
                   >
                     항목
                   </th>
-                  {qaVersions.map((version: any, idx: number) => (
-                    <th
-                      key={version.id}
-                      className="px-3 py-2 text-left border-r border-gray-200 font-semibold bg-gray-50"
-                      style={{
-                        minWidth: '300px',
-                        maxWidth: '400px',
-                        boxShadow: '0 1px 0 0 rgb(229 231 235)'
-                      }}
-                    >
-                      <div className="space-y-1">
-                        <div className="font-bold">V{idx + 1}</div>
-                        <div className="font-normal text-gray-600 truncate">{version.name}</div>
-                        <div className="font-normal text-gray-500">{version.type}</div>
-                        <div className="font-normal text-gray-400">
-                          {new Date(version.created_at).toLocaleDateString('ko-KR')}
+                  {qaVersions.map((version: any, idx: number) => {
+                    const isReportedVersion = version.id === data.report.interview_qas_id;
+                    return (
+                      <th
+                        key={version.id}
+                        className={`px-3 py-2 text-left border-r border-gray-200 ${
+                          isReportedVersion ? 'bg-gradient-to-br from-blue-50 to-indigo-50 font-semibold' : 'bg-gray-100/50 font-normal'
+                        }`}
+                        style={{
+                          minWidth: '300px',
+                          maxWidth: '400px',
+                          boxShadow: isReportedVersion
+                            ? 'inset 0 0 0 2px rgb(99 102 241 / 0.3), 0 1px 0 0 rgb(229 231 235)'
+                            : '0 1px 0 0 rgb(229 231 235)'
+                        }}
+                      >
+                        <div className="space-y-1">
+                          <div className={isReportedVersion ? 'font-bold' : 'font-medium text-gray-500'}>V{idx + 1}</div>
+                          <div className={`font-normal truncate ${isReportedVersion ? 'text-gray-600' : 'text-gray-400'}`}>{version.name}</div>
+                          <div className={`font-normal ${isReportedVersion ? 'text-gray-500' : 'text-gray-400'}`}>{version.type}</div>
+                          <div className={`font-normal ${isReportedVersion ? 'text-gray-400' : 'text-gray-300'}`}>
+                            {new Date(version.created_at).toLocaleDateString('ko-KR')}
+                          </div>
                         </div>
-                      </div>
-                    </th>
-                  ))}
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody>
@@ -653,12 +686,14 @@ export default function ReportDetailPage() {
                           item = group.answers[row.aIndex];
                         }
 
-                        // Check if this specific cell in this specific version is reported
-                        const isReportedVersion = version.id === reportedVersionId;
-                        const isReportedCell = reportedItems.has(row.qaKey);
-                        const isReported = isReportedVersion && isReportedCell;
+                        // Check if this specific cell in this specific version is reported across ANY report
+                        const versionReportMap = allReportedItems.get(version.id);
+                        const cellReportInfo = versionReportMap?.get(row.qaKey);
+                        const isReported = !!cellReportInfo?.isReported;
+                        const isRefunded = !!cellReportInfo?.isRefunded;
+                        const refundInfo = cellReportInfo?.refundInfo;
 
-                        // Check if this is the first reported cell
+                        // Check if this is the first reported cell (for current report only, for scroll)
                         const isFirstReported = firstReportedCell &&
                           version.id === firstReportedCell.versionId &&
                           row.qaKey === firstReportedCell.qaKey;
@@ -666,10 +701,6 @@ export default function ReportDetailPage() {
                         // Check if this cell is selected
                         const isSelected = selectedCell?.versionId === version.id && selectedCell?.qaKey === row.qaKey;
                         const isDropdownOpen = openDropdown?.versionId === version.id && openDropdown?.qaKey === row.qaKey;
-
-                        // Check if this cell is refunded
-                        const refundInfo = refundedItems.get(row.qaKey);
-                        const isRefunded = isReportedVersion && !!refundInfo;
 
                         return (
                           <td
@@ -788,27 +819,69 @@ export default function ReportDetailPage() {
 
               <div>
                 <div className="font-bold text-xs text-gray-700 mb-1.5">상태</div>
-                <select
-                  value={report.status}
-                  onChange={(e) => updateReportStatus(e.target.value as ReportStatus)}
-                  disabled={updatingStatus}
-                  style={{
-                    paddingLeft: '0.75rem',
-                    paddingRight: '2rem',
-                    paddingTop: '0.375rem',
-                    paddingBottom: '0.375rem',
-                    backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
-                    backgroundPosition: 'right 0.5rem center',
-                    backgroundRepeat: 'no-repeat',
-                    backgroundSize: '1.5em 1.5em',
-                  }}
-                  className="w-full border text-xs appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <option value="pending">대기 중</option>
-                  <option value="in_review">검토 중</option>
-                  <option value="resolved">해결됨</option>
-                  <option value="rejected">거부됨</option>
-                </select>
+                <div className="relative" ref={statusDropdownRef}>
+                  <button
+                    onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+                    disabled={updatingStatus}
+                    className="w-full px-3 py-2 text-sm text-left border border-gray-300 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-between"
+                  >
+                    <span>
+                      {report.status === 'pending' && '대기 중'}
+                      {report.status === 'in_review' && '검토 중'}
+                      {report.status === 'resolved' && '해결됨'}
+                      {report.status === 'rejected' && '거부됨'}
+                    </span>
+                    <ChevronDown className="w-4 h-4 text-gray-400" />
+                  </button>
+                  {showStatusDropdown && (
+                    <div className="absolute top-full left-0 mt-1 w-full bg-white border shadow-lg z-50">
+                      <div
+                        onClick={() => {
+                          updateReportStatus('pending');
+                          setShowStatusDropdown(false);
+                        }}
+                        className={`px-3 py-2 text-sm hover:bg-gray-100 cursor-pointer ${
+                          report.status === 'pending' ? 'bg-blue-50 text-blue-600' : ''
+                        }`}
+                      >
+                        대기 중
+                      </div>
+                      <div
+                        onClick={() => {
+                          updateReportStatus('in_review');
+                          setShowStatusDropdown(false);
+                        }}
+                        className={`px-3 py-2 text-sm hover:bg-gray-100 cursor-pointer ${
+                          report.status === 'in_review' ? 'bg-blue-50 text-blue-600' : ''
+                        }`}
+                      >
+                        검토 중
+                      </div>
+                      <div
+                        onClick={() => {
+                          updateReportStatus('resolved');
+                          setShowStatusDropdown(false);
+                        }}
+                        className={`px-3 py-2 text-sm hover:bg-gray-100 cursor-pointer ${
+                          report.status === 'resolved' ? 'bg-blue-50 text-blue-600' : ''
+                        }`}
+                      >
+                        해결됨
+                      </div>
+                      <div
+                        onClick={() => {
+                          updateReportStatus('rejected');
+                          setShowStatusDropdown(false);
+                        }}
+                        className={`px-3 py-2 text-sm hover:bg-gray-100 cursor-pointer ${
+                          report.status === 'rejected' ? 'bg-blue-50 text-blue-600' : ''
+                        }`}
+                      >
+                        거부됨
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div>

@@ -415,6 +415,7 @@ export async function getReportDetailWithVersions(
 ): Promise<{
   report: ReportWithDetails
   qaVersions: any[]
+  allReports: Report[]
 } | null> {
   // First get the report
   const report = await getReportWithDetails(supabase, reportId)
@@ -431,9 +432,28 @@ export async function getReportDetailWithVersions(
     throw new Error(`Failed to fetch QA versions: ${error.message}`)
   }
 
+  // Get all QA version IDs
+  const qaVersionIds = (qaVersions || []).map(v => v.id)
+
+  // Fetch all reports that reference any of these QA versions
+  let allReports: Report[] = []
+  if (qaVersionIds.length > 0) {
+    const { data: reportsData, error: reportsError } = await supabase
+      .from('reports')
+      .select('*')
+      .in('interview_qas_id', qaVersionIds)
+
+    if (reportsError) {
+      throw new Error(`Failed to fetch all reports: ${reportsError.message}`)
+    }
+
+    allReports = reportsData || []
+  }
+
   return {
     report,
-    qaVersions: qaVersions || []
+    qaVersions: qaVersions || [],
+    allReports
   }
 }
 
