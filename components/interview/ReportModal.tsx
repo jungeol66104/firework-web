@@ -51,7 +51,7 @@ export default function ReportModal({
     }
 
     if (selectedQuestions.size === 0 && selectedAnswers.size === 0) {
-      toast.error('신고할 질문 또는 답변을 선택해주세요')
+      toast.error('이의신청할 질문 또는 답변을 선택해주세요')
       return
     }
 
@@ -73,16 +73,16 @@ export default function ReportModal({
 
       if (!response.ok) {
         const error = await response.json()
-        throw new Error(error.error || '신고 접수에 실패했습니다')
+        throw new Error(error.error || '이의신청 접수에 실패했습니다')
       }
 
-      toast.success('신고가 접수되었습니다')
+      toast.success('이의신청이 접수되었습니다')
       setDescription('')
       onOpenChange(false)
       onSuccess?.()
     } catch (error) {
       console.error('Report submission error:', error)
-      toast.error(error instanceof Error ? error.message : '신고 접수에 실패했습니다')
+      toast.error(error instanceof Error ? error.message : '이의신청 접수에 실패했습니다')
     } finally {
       setIsSubmitting(false)
     }
@@ -137,9 +137,9 @@ export default function ReportModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>문제 신고</DialogTitle>
+          <DialogTitle>문제 이의신청</DialogTitle>
           <DialogDescription>
-            선택한 질문 또는 답변에 문제가 있다면 신고해주세요. 검토 후 유효한 경우 토큰을 환불해드립니다.
+            선택한 질문 또는 답변에 문제가 있다면 이의신청해주세요. 검토 후 유효한 경우 토큰을 환불해드립니다.
           </DialogDescription>
         </DialogHeader>
 
@@ -196,7 +196,7 @@ export default function ReportModal({
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription className="text-xs">
-              신고 검토 후 유효한 경우, 질문당 0.1 토큰, 답변당 0.2 토큰이 환불됩니다.
+              이의신청 검토 후 유효한 경우, 질문당 0.1 토큰, 답변당 0.2 토큰이 환불됩니다.
             </AlertDescription>
           </Alert>
         </div>
@@ -219,7 +219,7 @@ export default function ReportModal({
                 접수 중...
               </>
             ) : (
-              '신고 접수'
+              '이의신청 접수'
             )}
           </Button>
         </DialogFooter>

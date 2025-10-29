@@ -139,7 +139,7 @@ export default function ReportsSection() {
 
     return (
       <div className="space-y-3">
-        <h4 className="text-sm font-semibold text-gray-700">신고된 항목</h4>
+        <h4 className="text-sm font-semibold text-gray-700">이의신청된 항목</h4>
         <div className="border rounded-md p-3 space-y-3 max-h-64 overflow-y-auto">
           {Object.entries(groupedItems).map(([category, items]) => (
             <div key={category} className="space-y-2">
@@ -169,7 +169,7 @@ export default function ReportsSection() {
   return (
     <div id="reports" className="w-full max-w-4xl p-4">
       <div className="flex justify-between items-center mb-4">
-        <h1 className="text-2xl font-bold">신고 내역</h1>
+        <h1 className="text-2xl font-bold">이의신청 내역</h1>
       </div>
 
       {isLoading ? (
@@ -185,7 +185,7 @@ export default function ReportsSection() {
       ) : reports.length === 0 ? (
         <Card>
           <CardContent className="pt-6">
-            <p className="text-center text-gray-500">신고 내역이 없습니다.</p>
+            <p className="text-center text-gray-500">이의신청 내역이 없습니다.</p>
           </CardContent>
         </Card>
       ) : (
@@ -246,18 +246,18 @@ export default function ReportsSection() {
                   <CardContent className="pt-0 px-4 pb-4 border-t">
                     {/* Full description */}
                     <div className="mb-4 pt-4">
-                      <h4 className="text-sm font-semibold text-gray-700 mb-2">신고 내용</h4>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-2">이의신청 내용</h4>
                       <p className="text-sm text-gray-600 leading-relaxed">{report.description}</p>
                     </div>
 
                     {/* Summary stats */}
                     <div className="flex mb-4 text-sm gap-2">
                       <div className="flex items-center gap-2">
-                        <span className="text-gray-500">신고 질문:</span>
+                        <span className="text-gray-500">이의신청 질문:</span>
                         <span className="font-medium text-gray-900">{questionCount}개</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-gray-500">신고 답변:</span>
+                        <span className="text-gray-500">이의신청 답변:</span>
                         <span className="font-medium text-gray-900">{answerCount}개</span>
                       </div>
                       {totalRefunded > 0 && (

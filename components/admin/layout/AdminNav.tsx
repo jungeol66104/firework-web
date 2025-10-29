@@ -56,7 +56,7 @@ export const AdminNav: React.FC = () => {
     { href: '/admin/users', label: '사용자' },
     { href: '/admin/interviews', label: '면접' },
     { href: '/admin/qas', label: '질의응답' },
-    { href: '/admin/reports', label: '신고' },
+    { href: '/admin/reports', label: '이의신청' },
     { href: '/admin/payments', label: '결제' },
   ]
 

@@ -168,7 +168,7 @@ export default function ReportDetailPage() {
       const targetReport = (data.allReports || []).find((r: any) => r.interview_qas_id === versionId);
 
       if (!targetReport) {
-        setAlertDialog({ open: true, title: '오류', message: '해당 버전의 신고를 찾을 수 없습니다.' });
+        setAlertDialog({ open: true, title: '오류', message: '해당 버전의 이의신청을 찾을 수 없습니다.' });
         setOpenDropdown(null);
         return;
       }
@@ -843,11 +843,11 @@ export default function ReportDetailPage() {
       <ResizablePanel defaultSize={25} minSize={20} maxSize={40}>
         <div className="h-full bg-white overflow-y-auto">
           <div className="p-6">
-            <h2 className="text-lg font-bold mb-6">신고 상세</h2>
+            <h2 className="text-lg font-bold mb-6">이의신청 상세</h2>
 
             <div className="space-y-5 text-sm">
               <div>
-                <div className="font-bold text-xs text-gray-700 mb-1.5">신고 ID</div>
+                <div className="font-bold text-xs text-gray-700 mb-1.5">이의신청 ID</div>
                 <div className="font-mono text-xs text-gray-600 break-all">
                   {report.id}
                 </div>
@@ -944,7 +944,7 @@ export default function ReportDetailPage() {
                 <textarea
                   value={adminResponse}
                   onChange={(e) => setAdminResponse(e.target.value)}
-                  placeholder="신고에 대한 관리자 응답을 입력하세요..."
+                  placeholder="이의신청에 대한 관리자 응답을 입력하세요..."
                   className="w-full px-3 py-2 text-sm border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[100px] resize-y"
                   disabled={savingResponse}
                 />
@@ -958,7 +958,7 @@ export default function ReportDetailPage() {
               </div>
 
               <div>
-                <div className="font-bold text-xs text-gray-700 mb-1.5">신고 항목</div>
+                <div className="font-bold text-xs text-gray-700 mb-1.5">이의신청 항목</div>
                 <div className="text-sm text-gray-900">
                   질문 <span className="font-semibold">{report.items?.questions?.length || 0}개</span>,
                   답변 <span className="font-semibold">{report.items?.answers?.length || 0}개</span>

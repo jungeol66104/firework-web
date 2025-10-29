@@ -164,7 +164,7 @@ export default function AdminReportsPage() {
     return (
       <div className="h-full flex-1 bg-white">
         <div className="max-w-4xl mx-auto pb-4">
-          <h1 className="text-2xl font-bold mb-4">신고 관리</h1>
+          <h1 className="text-2xl font-bold mb-4">이의신청 관리</h1>
           <div className="flex items-center justify-center py-20">
             <Loader className="animate-spin w-4 h-4" />
           </div>
@@ -177,7 +177,7 @@ export default function AdminReportsPage() {
     <div className="bg-white h-full flex flex-col overflow-hidden" style={{ height: 'calc(100vh - 60px)' }}>
       <div className="max-w-4xl mx-auto pb-4 w-full flex-1 flex flex-col overflow-hidden">
         <div className="mb-4">
-          <h1 className="text-2xl font-bold">신고 관리</h1>
+          <h1 className="text-2xl font-bold">이의신청 관리</h1>
         </div>
 
         {/* Table */}
@@ -299,7 +299,7 @@ export default function AdminReportsPage() {
                     />
                   </th>
                   <th className="px-3 py-2 text-left text-xs" style={{ width: columnWidths.created, minWidth: columnWidths.created }}>
-                    신고일
+                    이의신청일
                   </th>
                 </tr>
               </thead>

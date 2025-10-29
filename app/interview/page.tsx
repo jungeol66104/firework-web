@@ -2095,7 +2095,7 @@ function InterviewPage() {
                             className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
                             disabled={selectedItems.size === 0}
                           >
-                            문제 신고
+                            선택 이의신청
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
