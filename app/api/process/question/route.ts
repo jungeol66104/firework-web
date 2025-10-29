@@ -87,13 +87,30 @@ async function handler(request: NextRequest) {
         return NextResponse.json({ error: 'Interview not found' }, { status: 404 })
       }
 
-      // Check for regeneration mode by looking for existing questions
-      let previousQuestions = null
-      // For now, we'll implement initial generation only
-      // TODO: Add regeneration support if needed
+      // Fetch all previous questions to avoid duplicates (limit to last 20 generations)
+      const { data: allQAs } = await supabase
+        .from('interview_qas')
+        .select('questions_data')
+        .eq('interview_id', interviewId)
+        .order('created_at', { ascending: false })
+        .limit(20)
 
-      // Prepare the prompt
-      const prompt = generatePrompt(interview, undefined, previousQuestions)
+      // Extract all previous questions into a flat array
+      const previousQuestions: string[] = []
+      if (allQAs && allQAs.length > 0) {
+        allQAs.forEach(qa => {
+          if (qa.questions_data) {
+            const { general_personality, cover_letter_personality, cover_letter_competency } = qa.questions_data
+            if (general_personality) previousQuestions.push(...general_personality)
+            if (cover_letter_personality) previousQuestions.push(...cover_letter_personality)
+            if (cover_letter_competency) previousQuestions.push(...cover_letter_competency)
+          }
+        })
+        console.log(`Found ${previousQuestions.length} previous questions to avoid for job`, jobId)
+      }
+
+      // Prepare the prompt with previous questions if they exist
+      const prompt = generatePrompt(interview, undefined, previousQuestions.length > 0 ? previousQuestions : null)
       console.log('Generated prompt for job', jobId, 'length:', prompt.length)
 
       // STEP 3: Generate with Gemini (user already paid)
@@ -239,16 +256,21 @@ async function handler(request: NextRequest) {
   }
 }
 
-function generatePrompt(interview: any, comment?: string, previousQuestions?: any): string {
-  if (previousQuestions) {
-    // Regeneration mode prompt
-    const prompt = `다음 기존 질문들을 참고하여 사용자 요청에 따라 질문을 생성해줘. 동일한 JSON 형식으로 정확히 30개를 유지해야 함.
+function generatePrompt(interview: any, comment?: string, previousQuestions?: string[] | null): string {
+  if (previousQuestions && previousQuestions.length > 0) {
+    // Regeneration mode prompt - avoid duplicates
+    const previousQuestionsText = previousQuestions
+      .map((q, i) => `${i + 1}. ${q}`)
+      .join('\n')
 
-[기존 질문들]
-${JSON.stringify(previousQuestions, null, 2)}
+    const prompt = `다음 JSON 형식으로 정확히 30개 면접 질문을 생성해줘. 첫 번째 질문은 반드시 '1분 자기소개 부탁드립니다.'로 시작해야 함.
+
+[생성하면 안 되는 기존 질문들]
+다음 질문들은 이전에 생성되었으므로 절대 생성하지 마세요. 완전히 새로운 질문을 만들어야 합니다:
+${previousQuestionsText}
 
 [사용자 요청]
-${comment || '기존 질문들을 개선해서 더 나은 질문으로 만들어줘'}
+${comment || '위의 기존 질문들과 중복되지 않는 완전히 새로운 질문들을 생성해줘'}
 
 [JSON 출력 형식]
 {
