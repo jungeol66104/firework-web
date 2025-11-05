@@ -37,7 +37,9 @@ export const signupSchema = z.object({
     .string()
     .optional(),
   signupPlatform: z
-    .enum(Object.keys(SIGNUP_PLATFORMS) as [string, ...string[]])
+    .enum(Object.keys(SIGNUP_PLATFORMS) as [string, ...string[]], {
+      message: '어디서 알게 되셨는지 선택해주세요',
+    })
     .refine(val => val in SIGNUP_PLATFORMS, '어디서 알게 되셨는지 선택해주세요'),
   signupPlatformDetail: z
     .string()

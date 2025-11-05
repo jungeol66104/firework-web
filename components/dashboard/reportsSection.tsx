@@ -166,8 +166,8 @@ export default function ReportsSection() {
     )
   }
 
-  // Hide the entire section if there are no reports
-  if (!isLoading && !error && reports.length === 0) {
+  // Hide the entire section by default - only show when there are actual reports
+  if (isLoading || error || reports.length === 0) {
     return null
   }
 
@@ -177,17 +177,7 @@ export default function ReportsSection() {
         <h1 className="text-2xl font-bold">이의신청 내역</h1>
       </div>
 
-      {isLoading ? (
-        <div className="flex justify-center items-center py-12">
-          <Loader className="h-4 w-4 animate-spin text-gray-500" />
-        </div>
-      ) : error ? (
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-center text-red-500">{error}</p>
-          </CardContent>
-        </Card>
-      ) : (
+      {(
         <div className="space-y-3">
           {reports.map((report) => {
             const questionCount = report.items.questions.length
