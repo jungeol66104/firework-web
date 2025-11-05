@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button"
 export default async function Dashboard() {
   const profile = await getCurrentUserProfileServer()
   const userName = profile?.name || "사용자"
+  const referralCode = profile?.referral_code
 
   // Get email from auth user
   const supabase = await createClient()
@@ -29,7 +30,7 @@ export default async function Dashboard() {
         <div className="hidden sm:flex sm:justify-center sm:items-start sm:gap-4">
           <div className="w-full max-w-4xl">
             <div className="w-full flex flex-col justify-center items-center gap-4">
-              <ProfileSection userName={userName} userEmail={userEmail} tokens={tokens} />
+              <ProfileSection userName={userName} userEmail={userEmail} tokens={tokens} referralCode={referralCode} />
               <ReportsSection />
             </div>
           </div>
@@ -39,7 +40,7 @@ export default async function Dashboard() {
         <div className="sm:hidden">
           <div className="flex flex-col items-center">
             <div className="w-full">
-              <ProfileSection userName={userName} userEmail={userEmail} tokens={tokens} />
+              <ProfileSection userName={userName} userEmail={userEmail} tokens={tokens} referralCode={referralCode} />
               <ReportsSection />
             </div>
           </div>

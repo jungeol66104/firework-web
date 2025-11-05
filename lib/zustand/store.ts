@@ -5,6 +5,7 @@ import { createQuestionsSlice, QuestionsSlice } from './slices/questionsSlice'
 import { createAnswersSlice, AnswersSlice } from './slices/answersSlice'
 import { createTokenSlice, TokenSlice } from './slices/tokenSlice'
 import { createJobsSlice, JobsSlice } from './slices/jobsSlice'
+import { createNotificationsSlice, NotificationsSlice } from './slices/notificationsSlice'
 
 // Helper function to get current user ID from localStorage or other auth source
 function getCurrentUserIdFromAuth(): string | null {
@@ -29,7 +30,7 @@ function getCurrentUserIdFromAuth(): string | null {
 }
 
 // Combined store type
-interface Store extends InterviewSlice, QuestionsSlice, AnswersSlice, TokenSlice, JobsSlice {}
+interface Store extends InterviewSlice, QuestionsSlice, AnswersSlice, TokenSlice, JobsSlice, NotificationsSlice {}
 
 // Create the main store
 export const useStore = create<Store>()(
@@ -41,6 +42,7 @@ export const useStore = create<Store>()(
         ...createAnswersSlice(set, get),
         ...createTokenSlice(set, get),
         ...createJobsSlice(set, get),
+        ...createNotificationsSlice(set, get),
       }),
       {
         name: 'interview-store',
@@ -131,6 +133,20 @@ export const useUpdateJob = () => useStore((state) => state.updateJob)
 export const useRemoveJob = () => useStore((state) => state.removeJob)
 export const useSetCompletionCallback = () => useStore((state) => state.setCompletionCallback)
 export const useRemoveCompletionCallback = () => useStore((state) => state.removeCompletionCallback)
+
+// Notification selectors
+export const useNotifications = () => useStore((state) => state.notifications)
+export const useUnreadCount = () => useStore((state) => state.unreadCount)
+export const useNotificationsLoading = () => useStore((state) => state.isLoadingNotifications)
+export const useNotificationDropdownOpen = () => useStore((state) => state.isDropdownOpen)
+export const useFetchNotifications = () => useStore((state) => state.fetchNotifications)
+export const useMarkNotificationAsRead = () => useStore((state) => state.markAsRead)
+export const useMarkNotificationAsUnread = () => useStore((state) => state.markAsUnread)
+export const useMarkAllNotificationsAsRead = () => useStore((state) => state.markAllAsRead)
+export const useToggleNotificationDropdown = () => useStore((state) => state.toggleDropdown)
+export const useSetNotificationDropdownOpen = () => useStore((state) => state.setDropdownOpen)
+export const useSubscribeToNotifications = () => useStore((state) => state.subscribeToNotifications)
+export const useUnsubscribeFromNotifications = () => useStore((state) => state.unsubscribeFromNotifications)
 
 
 

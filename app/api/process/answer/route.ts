@@ -3,6 +3,8 @@ import { verifySignatureAppRouter } from '@upstash/qstash/nextjs'
 import { createAdminClient } from '@/lib/supabase/clients/admin'
 import { fetchInterviewByIdServer, fetchInterviewQuestionsServer } from '@/lib/supabase/services/serverServices'
 import { checkTokenBalance, spendTokens, refundTokens } from '@/lib/supabase/services/tokenService'
+import { createNotification } from '@/lib/supabase/services/notificationService'
+import { NOTIFICATION_MESSAGES } from '@/lib/constants'
 import { GoogleGenAI, Type } from "@google/genai"
 
 async function handler(request: NextRequest) {
@@ -234,6 +236,24 @@ async function handler(request: NextRequest) {
         console.error('Failed to mark job as completed:', updateError)
       } else {
         console.log('Job marked as completed in database:', jobId)
+      }
+
+      // Create notification for user
+      try {
+        await createNotification(supabase, {
+          user_id: userId,
+          type: 'answers_generated',
+          message: NOTIFICATION_MESSAGES.answers_generated(interview.company_name || '회사'),
+          interview_id: interviewId,
+          interview_qas_id: savedQA.id,
+          metadata: {
+            company_name: interview.company_name
+          }
+        })
+        console.log('Notification created for job:', jobId)
+      } catch (notifError) {
+        console.error('Failed to create notification for job', jobId, ':', notifError)
+        // Don't fail the job if notification creation fails
       }
 
       console.log('Answer generation job completed successfully:', jobId)

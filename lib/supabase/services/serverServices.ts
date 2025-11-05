@@ -1,7 +1,8 @@
 import { createClient } from '../clients/server'
 import { fetchInterviews, fetchInterviewById, createProfile, fetchProfileById, updateProfile, fetchUserInterviews, getCurrentUserInterviews, deleteInterview, searchInterviewsByCandidateName, getCurrentUser, checkInterviewOwnership, updateInterview, getCurrentUserProfile, updateCurrentUserProfile, deleteCurrentUserAccount, fetchInterviewQuestions, createReport, fetchCurrentUserReports, fetchReportById, updateReport, fetchAllReports, refundReportItem } from './services'
 import { getUserTokens } from './tokenService'
-import { FetchInterviewsParams, FetchInterviewsResult, CreateProfileParams, Profile, Interview, CreateReportParams, Report, UpdateReportParams } from '@/lib/types'
+import { createNotification, fetchNotifications, getUnreadCount, markNotificationAsRead, markNotificationAsUnread, markAllNotificationsAsRead } from './notificationService'
+import { FetchInterviewsParams, FetchInterviewsResult, CreateProfileParams, Profile, Interview, CreateReportParams, Report, UpdateReportParams, CreateNotificationParams, Notification } from '@/lib/types'
 
 export async function fetchInterviewsServer(params: FetchInterviewsParams = {}): Promise<FetchInterviewsResult> {
   const supabase = await createClient()
@@ -169,4 +170,68 @@ export async function refundReportItemServer(
 ): Promise<Report> {
   const supabase = await createClient()
   return refundReportItem(supabase, reportId, itemType, category, index)
+}
+
+// Notification server services
+export async function createNotificationServer(params: CreateNotificationParams): Promise<Notification> {
+  const supabase = await createClient()
+  return createNotification(supabase, params)
+}
+
+export async function fetchNotificationsServer(userId: string, limit?: number): Promise<Notification[]> {
+  const supabase = await createClient()
+  return fetchNotifications(supabase, userId, limit)
+}
+
+export async function fetchCurrentUserNotificationsServer(limit?: number): Promise<Notification[]> {
+  const supabase = await createClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    throw new Error('User not authenticated')
+  }
+
+  return fetchNotifications(supabase, user.id, limit)
+}
+
+export async function getUnreadCountServer(userId: string): Promise<number> {
+  const supabase = await createClient()
+  return getUnreadCount(supabase, userId)
+}
+
+export async function getCurrentUserUnreadCountServer(): Promise<number> {
+  const supabase = await createClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    return 0
+  }
+
+  return getUnreadCount(supabase, user.id)
+}
+
+export async function markNotificationAsReadServer(notificationId: string, userId: string): Promise<void> {
+  const supabase = await createClient()
+  return markNotificationAsRead(supabase, notificationId, userId)
+}
+
+export async function markNotificationAsUnreadServer(notificationId: string, userId: string): Promise<void> {
+  const supabase = await createClient()
+  return markNotificationAsUnread(supabase, notificationId, userId)
+}
+
+export async function markAllNotificationsAsReadServer(userId: string): Promise<void> {
+  const supabase = await createClient()
+  return markAllNotificationsAsRead(supabase, userId)
+}
+
+export async function markCurrentUserAllNotificationsAsReadServer(): Promise<void> {
+  const supabase = await createClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    throw new Error('User not authenticated')
+  }
+
+  return markAllNotificationsAsRead(supabase, user.id)
 }

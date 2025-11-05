@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { SIGNUP_PLATFORMS } from '@/lib/constants/signup'
 
 export const signinSchema = z.object({
   email: z
@@ -32,9 +33,27 @@ export const signupSchema = z.object({
   confirmPassword: z
     .string()
     .min(1, '비밀번호 확인을 입력해주세요'),
+  referralCode: z
+    .string()
+    .optional(),
+  signupPlatform: z
+    .enum(Object.keys(SIGNUP_PLATFORMS) as [string, ...string[]])
+    .refine(val => val in SIGNUP_PLATFORMS, '어디서 알게 되셨는지 선택해주세요'),
+  signupPlatformDetail: z
+    .string()
+    .optional()
 }).refine((data) => data.password === data.confirmPassword, {
   message: '비밀번호가 일치하지 않습니다',
   path: ['confirmPassword'],
+}).refine((data) => {
+  // If platform is "other", detail is required
+  if (data.signupPlatform === 'other' && (!data.signupPlatformDetail || data.signupPlatformDetail.trim() === '')) {
+    return false
+  }
+  return true
+}, {
+  message: '기타를 선택하셨다면 구체적인 내용을 입력해주세요',
+  path: ['signupPlatformDetail']
 })
 
 export type SigninFormData = z.infer<typeof signinSchema>

@@ -4,18 +4,34 @@ import { createAdminClient } from '@/lib/supabase/clients/admin'
 import { createClient } from '@/lib/supabase/clients/server'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
+import { generateUniqueReferralCode, findUserByReferralCode } from '@/lib/utils/referralCode'
 
 export async function signin(formData: FormData) {
   const supabase = await createClient()
 
-  const data = { 
+  const data = {
     email: formData.get('email') as string,
     password: formData.get('password') as string,
   }
 
   const { error } = await supabase.auth.signInWithPassword(data)
   if (error) {
-    throw new Error(error.message || '로그인에 실패했습니다.')
+    console.error('Auth signin error:', error)
+
+    // Translate common Supabase error messages to Korean
+    const errorMsg = error.message?.toLowerCase() || ''
+    if (errorMsg.includes('invalid login credentials') || errorMsg.includes('invalid credentials')) {
+      throw new Error('이메일 또는 비밀번호가 올바르지 않습니다.')
+    }
+    if (errorMsg.includes('email not confirmed') || errorMsg.includes('email confirmation')) {
+      throw new Error('이메일 인증이 필요합니다. 이메일을 확인해주세요.')
+    }
+    if (errorMsg.includes('too many requests')) {
+      throw new Error('너무 많은 시도가 있었습니다. 잠시 후 다시 시도해주세요.')
+    }
+
+    // Don't expose raw English error messages - use generic Korean message
+    throw new Error('로그인에 실패했습니다. 다시 시도해주세요.')
   }
 
   revalidatePath('/', 'layout')
@@ -28,14 +44,21 @@ export async function signup(formData: FormData) {
   const email = formData.get('email') as string
   const password = formData.get('password') as string
   const name = formData.get('name') as string
+  const referralCode = formData.get('referralCode') as string | null
+  const signupPlatform = formData.get('signupPlatform') as string | null
+  const signupPlatformDetail = formData.get('signupPlatformDetail') as string | null
 
   if (!email || !password || !name) {
-    throw new Error('All fields are required')
+    throw new Error('모든 필드를 입력해주세요.')
+  }
+
+  if (!signupPlatform) {
+    throw new Error('어디서 알게 되셨는지 선택해주세요.')
   }
 
   // Enhanced password validation
   if (password.length < 8) {
-    throw new Error('Password must be at least 8 characters long')
+    throw new Error('비밀번호는 최소 8자 이상이어야 합니다.')
   }
 
   // Check for at least one uppercase letter, one lowercase letter, one number, and one special character
@@ -45,7 +68,7 @@ export async function signup(formData: FormData) {
   const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/.test(password)
 
   if (!hasUpperCase || !hasLowerCase || !hasNumbers || !hasSpecialChar) {
-    throw new Error('Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character')
+    throw new Error('비밀번호는 대문자, 소문자, 숫자, 특수문자를 각각 하나 이상 포함해야 합니다.')
   }
 
   const data = { email, password, options: { data: { name } } }
@@ -61,41 +84,76 @@ export async function signup(formData: FormData) {
 
     if (authError) {
       console.error('Auth signup error:', authError)
-      
-      // Handle specific error types
+
+      // Handle specific error types with Korean messages
       if (authError.status === 504) {
         throw new Error('서버 연결 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.')
       }
-      
+
       if (authError.status === 422) {
         throw new Error('이미 사용 중인 이메일입니다.')
       }
-      
-      // Use a meaningful message even if authError.message is empty
-      const errorMessage = authError.message?.trim() || 
-        (authError.status ? `서버 오류 (${authError.status})가 발생했습니다.` : '회원가입에 실패했습니다.')
-      
-      throw new Error(errorMessage)
+
+      // Check for common Supabase error messages and translate
+      const errorMsg = authError.message?.toLowerCase() || ''
+      if (errorMsg.includes('user already registered') || errorMsg.includes('already registered')) {
+        throw new Error('이미 가입된 이메일입니다.')
+      }
+      if (errorMsg.includes('email not confirmed') || errorMsg.includes('email confirmation')) {
+        throw new Error('이메일 인증이 필요합니다. 이메일을 확인해주세요.')
+      }
+      if (errorMsg.includes('invalid email')) {
+        throw new Error('올바른 이메일 형식이 아닙니다.')
+      }
+
+      // Don't expose raw English error messages - use generic Korean message
+      throw new Error('회원가입 중 오류가 발생했습니다. 다시 시도해주세요.')
     }
 
     if (!authData.user) {
       console.error('No user data returned from signup')
-      throw new Error('Signup failed - no user data returned')
+      throw new Error('회원가입에 실패했습니다. 다시 시도해주세요.')
+    }
+
+    // Generate unique referral code for the new user
+    let newUserReferralCode: string
+    try {
+      newUserReferralCode = await generateUniqueReferralCode(supabase)
+    } catch (error) {
+      console.error('Failed to generate referral code:', error)
+      throw new Error('회원가입 처리 중 오류가 발생했습니다. 다시 시도해주세요.')
+    }
+
+    // Find referrer if referral code was provided
+    let referrerId: string | null = null
+    if (referralCode) {
+      referrerId = await findUserByReferralCode(supabase, referralCode)
+      if (!referrerId) {
+        console.warn('Invalid referral code provided:', referralCode)
+        // Don't fail signup, just log the invalid code
+      }
     }
 
     const { error: profileError } = await supabase
       .from('profiles')
       .insert([{
         id: authData.user.id,
-        name: name
+        name: name,
+        referral_code: newUserReferralCode,
+        referred_by: referrerId,
+        signup_platform: signupPlatform,
+        signup_platform_detail: signupPlatform === 'other' ? signupPlatformDetail : null
       }])
 
     if (profileError) {
       console.error('Profile creation failed:', profileError)
-      const { error: deleteError } = await supabase.auth.admin.deleteUser(authData.user.id)
-      
+
+      // Use admin client to delete auth user if profile creation fails
+      const adminClient = createAdminClient()
+      const { error: deleteError } = await adminClient.auth.admin.deleteUser(authData.user.id)
+
       if (deleteError) console.error('Failed to delete auth user after profile failure:', deleteError)
-      throw new Error('Failed to create user profile')
+      throw new Error('프로필 생성에 실패했습니다. 다시 시도해주세요.')
     }
 
   } catch (error) {

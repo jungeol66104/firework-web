@@ -239,6 +239,37 @@ export default function ReportDetailPage() {
       const { addTokens } = await import('@/lib/supabase/services/tokenService');
       await addTokens(supabase, targetReport.user_id, refundAmount);
 
+      // Create notification for refund
+      try {
+        const { createNotification } = await import('@/lib/supabase/services/notificationService');
+        const { NOTIFICATION_MESSAGES } = await import('@/lib/constants');
+
+        // Fetch interview details to get company name
+        const { data: interviewData } = await supabase
+          .from('interviews')
+          .select('company_name')
+          .eq('id', targetReport.interview_id)
+          .single();
+
+        const companyName = interviewData?.company_name || '회사';
+
+        await createNotification(supabase, {
+          user_id: targetReport.user_id,
+          type: 'report_refund',
+          message: NOTIFICATION_MESSAGES.report_refund(companyName, refundAmount),
+          report_id: targetReport.id,
+          interview_id: targetReport.interview_id,
+          metadata: {
+            company_name: companyName,
+            tokens: refundAmount,
+            refund_count: 1
+          }
+        });
+      } catch (notifError) {
+        console.error('Failed to create refund notification:', notifError);
+        // Don't fail refund if notification creation fails
+      }
+
       // Update local state - update the correct report in allReports
       setData((prev: any) => {
         const updatedAllReports = (prev.allReports || []).map((r: any) => {
@@ -286,6 +317,26 @@ export default function ReportDetailPage() {
         console.error('Error saving admin response:', error);
         setAlertDialog({ open: true, title: '오류', message: '관리자 응답 저장에 실패했습니다.' });
         return;
+      }
+
+      // Create notification for admin response
+      if (data?.report?.user_id) {
+        try {
+          const { createNotification } = await import('@/lib/supabase/services/notificationService');
+          const { NOTIFICATION_MESSAGES } = await import('@/lib/constants');
+          const companyName = data.report.interview?.company_name || '회사';
+          await createNotification(supabase, {
+            user_id: data.report.user_id,
+            type: 'report_comment',
+            message: NOTIFICATION_MESSAGES.report_comment(companyName),
+            report_id: reportId,
+            interview_id: data.report.interview_id,
+            metadata: { company_name: companyName }
+          });
+        } catch (notifError) {
+          console.error('Failed to create admin response notification:', notifError);
+          // Don't fail save if notification creation fails
+        }
       }
 
       // Update local state

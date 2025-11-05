@@ -86,6 +86,10 @@ export interface Profile {
   name: string
   email?: string
   is_admin?: boolean
+  referral_code?: string
+  referred_by?: string
+  signup_platform?: string
+  signup_platform_detail?: string
   created_at: string
 }
 
@@ -162,4 +166,49 @@ export interface CreateReportParams {
 export interface UpdateReportParams {
   status?: ReportStatus
   admin_response?: string
+}
+
+// Notification types
+export type NotificationType =
+  | 'questions_generated'
+  | 'answers_generated'
+  | 'question_regenerated'
+  | 'answer_regenerated'
+  | 'question_edited'
+  | 'answer_edited'
+  | 'report_comment'
+  | 'report_refund'
+  | 'payment_complete'
+
+export interface NotificationMetadata {
+  category?: 'general_personality' | 'cover_letter_personality' | 'cover_letter_competency'
+  index?: number
+  tokens?: number
+  refund_count?: number
+  company_name?: string
+}
+
+export interface Notification {
+  id: string
+  user_id: string
+  type: NotificationType
+  message: string
+  interview_id: string | null
+  interview_qas_id: string | null
+  report_id: string | null
+  payment_id: string | null
+  metadata: NotificationMetadata
+  is_read: boolean
+  created_at: string
+}
+
+export interface CreateNotificationParams {
+  user_id: string
+  type: NotificationType
+  message: string
+  interview_id?: string
+  interview_qas_id?: string
+  report_id?: string
+  payment_id?: string
+  metadata?: NotificationMetadata
 }

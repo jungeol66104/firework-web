@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { AlertCircle, Loader, LogOut, Hexagon } from "lucide-react"
+import { AlertCircle, Loader, LogOut, Hexagon, Copy, Check } from "lucide-react"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
@@ -20,9 +20,10 @@ interface ProfileSectionProps {
   userName: string
   userEmail?: string
   tokens: number
+  referralCode?: string
 }
 
-export default function ProfileSection({ userName, userEmail, tokens: initialTokens }: ProfileSectionProps) {
+export default function ProfileSection({ userName, userEmail, tokens: initialTokens, referralCode }: ProfileSectionProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [name, setName] = useState(userName)
   const [email, setEmail] = useState(userEmail || "")
@@ -30,6 +31,7 @@ export default function ProfileSection({ userName, userEmail, tokens: initialTok
   const [isLoading, setIsLoading] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [isCopied, setIsCopied] = useState(false)
   const router = useRouter()
   const { openPaymentPopup } = usePaymentPopup()
   const reset = useStore((state) => state.reset)
@@ -106,17 +108,30 @@ export default function ProfileSection({ userName, userEmail, tokens: initialTok
     try {
       // Clear the Zustand store first
       reset()
-      
+
       // Clear localStorage store manually as well
       localStorage.removeItem('interview-store')
-      
+
       await signout()
-      // The server action will handle the redirect, but we show a toast just in case
-      toast.success("로그아웃되었습니다")
+      // The server action will handle the redirect to /auth/signin
     } catch (error) {
       console.error('Logout error:', error)
       toast.error(error instanceof Error ? error.message : '로그아웃에 실패했습니다')
       setIsLoggingOut(false)
+    }
+  }
+
+  const handleCopyReferralCode = async () => {
+    if (!referralCode) return
+
+    try {
+      await navigator.clipboard.writeText(referralCode)
+      setIsCopied(true)
+      toast.success('추천인 코드가 복사되었습니다')
+      setTimeout(() => setIsCopied(false), 2000)
+    } catch (error) {
+      console.error('Failed to copy referral code:', error)
+      toast.error('복사에 실패했습니다')
     }
   }
 
@@ -170,6 +185,27 @@ export default function ProfileSection({ userName, userEmail, tokens: initialTok
               <span className="text-sm text-gray-600">{email || "이메일이 설정되지 않았습니다"}</span>
             </div>
           </div>
+          {referralCode && (
+            <div className="space-y-2">
+              <Label htmlFor="referralCode">추천인 코드</Label>
+              <div className="text-foreground dark:bg-input/30 flex items-center h-9 w-full min-w-0 rounded-md bg-transparent py-1 text-base transition-[color,box-shadow] outline-none md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600 font-mono">{referralCode}</span>
+                  <button
+                    type="button"
+                    onClick={handleCopyReferralCode}
+                    className="p-1 text-gray-600 cursor-pointer"
+                  >
+                    {isCopied ? (
+                      <Check className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor="tokens">남은 토큰</Label>
             <div className="text-foreground dark:bg-input/30 flex items-center justify-between h-9 w-full min-w-0 rounded-md bg-transparent py-1 text-base transition-[color,box-shadow] outline-none md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50">

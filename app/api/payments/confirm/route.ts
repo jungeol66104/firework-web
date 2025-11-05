@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/clients/server'
 import { addTokens } from '@/lib/supabase/services/tokenService'
+import { createNotification } from '@/lib/supabase/services/notificationService'
+import { NOTIFICATION_MESSAGES } from '@/lib/constants'
 
 export async function POST(request: NextRequest) {
   try {
@@ -74,7 +76,7 @@ export async function POST(request: NextRequest) {
     await addTokens(supabase, user.id, paymentRecord.tokens)
 
     // Update payment record
-    await supabase
+    const { data: updatedPayment } = await supabase
       .from('payments')
       .update({
         status: 'completed',
@@ -83,6 +85,24 @@ export async function POST(request: NextRequest) {
         completed_at: new Date().toISOString()
       })
       .eq('order_id', orderId)
+      .select()
+      .single()
+
+    // Create notification for user
+    try {
+      await createNotification(supabase, {
+        user_id: user.id,
+        type: 'payment_complete',
+        message: NOTIFICATION_MESSAGES.payment_complete(paymentRecord.tokens),
+        payment_id: paymentRecord.id,
+        metadata: {
+          tokens: paymentRecord.tokens
+        }
+      })
+    } catch (notifError) {
+      console.error('Failed to create payment notification:', notifError)
+      // Don't fail payment if notification creation fails
+    }
 
     return NextResponse.json({
       success: true,

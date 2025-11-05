@@ -5,15 +5,19 @@ import { Button } from "@/components/ui/button"
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from "@/components/ui/select"
 import Link from "next/link"
 import { signup } from "@/app/auth/actions"
-import { useState } from "react"
-import { useForm } from "react-hook-form"
+import { useState, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
+import { useForm, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { signupSchema, type SignupFormData } from "@/lib/validations"
+import { SIGNUP_PLATFORM_OPTIONS } from "@/lib/constants/signup"
 import { Eye, EyeOff } from "lucide-react"
 
 export function SignupForm({ className, ...props }: React.ComponentProps<"div">) {
+  const searchParams = useSearchParams()
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
@@ -22,11 +26,27 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
   const {
     register,
     handleSubmit,
+    control,
+    watch,
+    setValue,
     formState: { errors },
     setError: setFormError,
   } = useForm<SignupFormData>({
     resolver: zodResolver(signupSchema),
+    defaultValues: {
+      referralCode: searchParams?.get('ref') || undefined,
+    }
   })
+
+  const selectedPlatform = watch('signupPlatform')
+
+  // Pre-fill referral code from URL
+  useEffect(() => {
+    const refCode = searchParams?.get('ref')
+    if (refCode) {
+      setValue('referralCode', refCode.toUpperCase())
+    }
+  }, [searchParams, setValue])
 
   async function onSubmit(data: SignupFormData) {
     setIsLoading(true)
@@ -37,7 +57,14 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
       formData.append('name', data.name)
       formData.append('email', data.email)
       formData.append('password', data.password)
-      
+      if (data.referralCode) {
+        formData.append('referralCode', data.referralCode.toUpperCase().trim())
+      }
+      formData.append('signupPlatform', data.signupPlatform)
+      if (data.signupPlatformDetail) {
+        formData.append('signupPlatformDetail', data.signupPlatformDetail.trim())
+      }
+
       await signup(formData)
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : '회원가입 중 오류가 발생했습니다.'
@@ -63,11 +90,13 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
                 </div>
               )}
               <div className="grid gap-3">
-                <Label htmlFor="name">이름</Label>
-                <Input 
-                  id="name" 
-                  type="text" 
-                  placeholder="정코치" 
+                <Label htmlFor="name">
+                  이름 <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="name"
+                  type="text"
+                  placeholder="정코치"
                   {...register('name')}
                   className={errors.name ? 'border-red-500' : ''}
                 />
@@ -76,11 +105,13 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
                 )}
               </div>
               <div className="grid gap-3">
-                <Label htmlFor="email">이메일</Label>
-                <Input 
-                  id="email" 
-                  type="email" 
-                  placeholder="jungcoach@example.com" 
+                <Label htmlFor="email">
+                  이메일 <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="jungcoach@example.com"
                   {...register('email')}
                   className={errors.email ? 'border-red-500' : ''}
                 />
@@ -89,10 +120,12 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
                 )}
               </div>
               <div className="grid gap-3">
-                <Label htmlFor="password">비밀번호</Label>
+                <Label htmlFor="password">
+                  비밀번호 <span className="text-red-500">*</span>
+                </Label>
                 <div className="relative">
-                  <Input 
-                    id="password" 
+                  <Input
+                    id="password"
                     type={showPassword ? "text" : "password"}
                     {...register('password')}
                     className={cn("pr-10", errors.password ? 'border-red-500' : '')}
@@ -117,10 +150,12 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
                 </p>
               </div>
               <div className="grid gap-3">
-                <Label htmlFor="confirmPassword">비밀번호 확인</Label>
+                <Label htmlFor="confirmPassword">
+                  비밀번호 확인 <span className="text-red-500">*</span>
+                </Label>
                 <div className="relative">
-                  <Input 
-                    id="confirmPassword" 
+                  <Input
+                    id="confirmPassword"
                     type={showConfirmPassword ? "text" : "password"}
                     {...register('confirmPassword')}
                     className={cn("pr-10", errors.confirmPassword ? 'border-red-500' : '')}
@@ -140,6 +175,65 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
                 {errors.confirmPassword && (
                   <p className="text-sm text-red-600">{errors.confirmPassword.message}</p>
                 )}
+              </div>
+              <div className="grid gap-3">
+                <Label htmlFor="signupPlatform">
+                  어디서 알게 되셨나요? <span className="text-red-500">*</span>
+                </Label>
+                <Controller
+                  name="signupPlatform"
+                  control={control}
+                  render={({ field }) => (
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <SelectTrigger className={errors.signupPlatform ? 'border-red-500' : ''}>
+                        <SelectValue placeholder="선택해주세요" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {SIGNUP_PLATFORM_OPTIONS.map((option) => (
+                          <SelectItem key={option.key} value={option.key}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+                {errors.signupPlatform && (
+                  <p className="text-sm text-red-600">{errors.signupPlatform.message}</p>
+                )}
+              </div>
+              {selectedPlatform === 'other' && (
+                <div className="grid gap-3">
+                  <Label htmlFor="signupPlatformDetail">
+                    구체적으로 어디서 알게 되셨나요? <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="signupPlatformDetail"
+                    type="text"
+                    placeholder="예: 친구 카톡, 유튜브 광고 등"
+                    {...register('signupPlatformDetail')}
+                    className={errors.signupPlatformDetail ? 'border-red-500' : ''}
+                  />
+                  {errors.signupPlatformDetail && (
+                    <p className="text-sm text-red-600">{errors.signupPlatformDetail.message}</p>
+                  )}
+                </div>
+              )}
+              <div className="grid gap-3">
+                <Label htmlFor="referralCode">추천인 코드 (선택사항)</Label>
+                <Input
+                  id="referralCode"
+                  type="text"
+                  placeholder="예: K7M9X2"
+                  {...register('referralCode')}
+                  className={cn("uppercase", errors.referralCode ? 'border-red-500' : '')}
+                />
+                {errors.referralCode && (
+                  <p className="text-sm text-red-600">{errors.referralCode.message}</p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  추천인 코드가 있다면 입력해주세요.
+                </p>
               </div>
               <div className="flex flex-col gap-3">
                 <Button type="submit" className="w-full" disabled={isLoading}>

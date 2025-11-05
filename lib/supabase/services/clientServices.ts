@@ -1,7 +1,8 @@
 import { createClient } from '../clients/client'
 import { createInterview, deleteInterview, searchInterviewsByCandidateName, fetchInterviewById, fetchInterviews, fetchUserInterviews, getCurrentUserInterviews, getCurrentUser, checkInterviewOwnership, updateInterview, getCurrentUserProfile, updateCurrentUserProfile, deleteCurrentUserAccount, fetchInterviewQuestions, createInterviewQuestion, updateInterviewQuestion, deleteInterviewQuestion, fetchInterviewAnswers, createInterviewAnswer, updateInterviewAnswer, deleteInterviewAnswer, createReport, fetchCurrentUserReports, fetchReportById } from './services'
 import { getUserTokens } from './tokenService'
-import { CreateInterviewParams, Interview, FetchInterviewsParams, FetchInterviewsResult, CreateReportParams, Report } from '@/lib/types'
+import { fetchNotifications, getUnreadCount, markNotificationAsRead, markNotificationAsUnread, markAllNotificationsAsRead } from './notificationService'
+import { CreateInterviewParams, Interview, FetchInterviewsParams, FetchInterviewsResult, CreateReportParams, Report, Notification } from '@/lib/types'
 
 export async function createInterviewClient(
   params: CreateInterviewParams
@@ -329,4 +330,70 @@ export async function fetchCurrentUserReportsClient(): Promise<Report[]> {
 export async function fetchReportByIdClient(reportId: string): Promise<Report | null> {
   const supabase = createClient()
   return fetchReportById(supabase, reportId)
+}
+
+// Notification client services
+export async function fetchNotificationsClient(userId: string, limit?: number): Promise<Notification[]> {
+  const supabase = createClient()
+  return fetchNotifications(supabase, userId, limit)
+}
+
+export async function fetchCurrentUserNotificationsClient(limit?: number): Promise<Notification[]> {
+  const supabase = createClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    throw new Error('User not authenticated')
+  }
+
+  return fetchNotifications(supabase, user.id, limit)
+}
+
+export async function getUnreadCountClient(userId: string): Promise<number> {
+  const supabase = createClient()
+  return getUnreadCount(supabase, userId)
+}
+
+export async function getCurrentUserUnreadCountClient(): Promise<number> {
+  const supabase = createClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    return 0
+  }
+
+  return getUnreadCount(supabase, user.id)
+}
+
+export async function markNotificationAsReadClient(notificationId: string): Promise<void> {
+  const supabase = createClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    throw new Error('User not authenticated')
+  }
+
+  return markNotificationAsRead(supabase, notificationId, user.id)
+}
+
+export async function markNotificationAsUnreadClient(notificationId: string): Promise<void> {
+  const supabase = createClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    throw new Error('User not authenticated')
+  }
+
+  return markNotificationAsUnread(supabase, notificationId, user.id)
+}
+
+export async function markAllNotificationsAsReadClient(): Promise<void> {
+  const supabase = createClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    throw new Error('User not authenticated')
+  }
+
+  return markAllNotificationsAsRead(supabase, user.id)
 }

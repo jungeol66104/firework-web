@@ -10,6 +10,7 @@ import { usePaymentPopup } from "@/hooks/usePaymentPopup";
 import { User } from "@supabase/supabase-js";
 import { Profile, Interview } from "@/lib/types";
 import { CreateInterviewButton } from "@/components/createInterviewButton";
+import { NotificationButton } from "@/components/notifications/NotificationButton";
 
 interface NavBarProps {
   children?: React.ReactNode
@@ -99,6 +100,7 @@ export const NavBar: React.FC<NavBarProps> = ({ children }) => {
               <CreditCard className="w-4 h-4 sm:hidden" />
               <span className="hidden sm:inline">충전하기</span>
             </Button>
+            <NotificationButton />
             <CreateInterviewButton
               className="border-gray-300 text-gray-700 hover:bg-gray-100"
               size="sm"
