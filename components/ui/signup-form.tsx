@@ -23,6 +23,9 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
+  // Safely get ref code with proper null handling
+  const refCode = searchParams?.get('ref') || undefined
+
   const {
     register,
     handleSubmit,
@@ -34,7 +37,7 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
   } = useForm<SignupFormData>({
     resolver: zodResolver(signupSchema),
     defaultValues: {
-      referralCode: searchParams?.get('ref') || undefined,
+      referralCode: refCode,
     }
   })
 
@@ -84,11 +87,6 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)}>
             <div className="flex flex-col gap-6">
-              {error && (
-                <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md">
-                  {error}
-                </div>
-              )}
               <div className="grid gap-3">
                 <Label htmlFor="name">
                   이름 <span className="text-red-500">*</span>
@@ -239,6 +237,11 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? "처리 중..." : "회원가입"}
                 </Button>
+                {error && (
+                  <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md">
+                    {error}
+                  </div>
+                )}
               </div>
             </div>
             <div className="mt-4 text-center text-sm">

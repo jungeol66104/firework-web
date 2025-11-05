@@ -48,11 +48,6 @@ export function SigninForm({ className, ...props }: React.ComponentProps<"div">)
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)}>
             <div className="flex flex-col gap-6">
-              {error && (
-                <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md">
-                  {error}
-                </div>
-              )}
               <div className="grid gap-3">
                 <Label htmlFor="email">이메일</Label>
                 <Input
@@ -90,6 +85,11 @@ export function SigninForm({ className, ...props }: React.ComponentProps<"div">)
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? "로그인 중..." : "로그인"}
                 </Button>
+                {error && (
+                  <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md">
+                    {error}
+                  </div>
+                )}
                 {/* <Button variant="outline" className="w-full">
                   Google로 로그인
                 </Button> */}
