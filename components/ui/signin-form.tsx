@@ -26,12 +26,15 @@ export function SigninForm({ className, ...props }: React.ComponentProps<"div">)
       const formData = new FormData()
       formData.append('email', data.email)
       formData.append('password', data.password)
-      
+
       await signin(formData)
     } catch (err) {
+      // Re-throw redirect errors to allow Next.js to handle them
+      if (err instanceof Error && err.message === 'NEXT_REDIRECT') {
+        throw err
+      }
       const errorMessage = err instanceof Error ? err.message : '로그인 중 오류가 발생했습니다.'
       setError(errorMessage)
-    } finally {
       setIsLoading(false)
     }
   }

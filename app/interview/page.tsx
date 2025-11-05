@@ -1569,7 +1569,7 @@ function InterviewPage() {
                     {!isHydrated || !hasInitialized || (interviews.length > 0 && !selectedInterview) ? (
                       <Loader className="h-4 w-4 animate-spin text-gray-900" />
                     ) : hasInitialized && interviews.length === 0 ? (
-                      <h1 className="text-xl font-bold text-left text-gray-900">면접이 없습니다</h1>
+                      <h1 className="text-xl font-bold text-left text-gray-900">새 면접 생성</h1>
                     ) : null}
                     {!(!isHydrated || !hasInitialized || (interviews.length > 0 && !selectedInterview)) && interviews.length > 0 && (
                       <Select
@@ -1599,45 +1599,62 @@ function InterviewPage() {
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-3">
-                    {/* Tabs for View Switching */}
-                    <Tabs value={activeView} onValueChange={(value) => setActiveView(value as 'info' | 'qa')} className="h-8">
-                      <TabsList className="h-8 bg-gray-100">
-                        <TabsTrigger value="qa" className="h-7 text-sm px-3 cursor-pointer">
-                          질문/답변
-                        </TabsTrigger>
-                        <TabsTrigger value="info" className="h-7 text-sm px-3 cursor-pointer">
-                          기본정보
-                        </TabsTrigger>
-                      </TabsList>
-                    </Tabs>
+                  {interviews.length > 0 && (
+                    <div className="flex items-center gap-3">
+                      {/* Tabs for View Switching */}
+                      <Tabs value={activeView} onValueChange={(value) => setActiveView(value as 'info' | 'qa')} className="h-8">
+                        <TabsList className="h-8 bg-gray-100">
+                          <TabsTrigger value="qa" className="h-7 text-sm px-3 cursor-pointer">
+                            질문/답변
+                          </TabsTrigger>
+                          <TabsTrigger value="info" className="h-7 text-sm px-3 cursor-pointer">
+                            기본정보
+                          </TabsTrigger>
+                        </TabsList>
+                      </Tabs>
 
-                    {/* More Menu */}
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="h-8 w-8"
-                        >
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="start">
-                        <DropdownMenuItem
-                          onClick={() => setShowDeleteDialog(true)}
-                          className="text-red-600 cursor-pointer focus:text-red-600"
-                        >
-                          삭제
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
+                      {/* More Menu */}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-8 w-8"
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start">
+                          <DropdownMenuItem
+                            onClick={() => setShowDeleteDialog(true)}
+                            className="text-red-600 cursor-pointer focus:text-red-600"
+                          >
+                            삭제
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  )}
                 </div>
 
                 {/* Tab Content Area */}
                 <div className="flex-1 overflow-hidden flex flex-col">
-                  {activeView === 'info' ? (
+                  {interviews.length === 0 ? (
+                    /* Empty State - No Interviews */
+                    <div className="flex flex-col items-center justify-center h-full gap-3">
+                      <p className="text-gray-500 text-center text-sm">
+                        아직 생성된 면접이 없습니다.<br />
+                        새 면접을 생성하여 준비를 시작해보세요.
+                      </p>
+                      <Button
+                        variant="outline"
+                        className="h-8 text-sm"
+                        onClick={() => setShowCreateInterviewDialog(true)}
+                      >
+                        새 면접 생성
+                      </Button>
+                    </div>
+                  ) : activeView === 'info' ? (
                     /* Info View Content */
                     <div className="h-full overflow-y-scroll">
                       <div className="p-6">
@@ -1986,17 +2003,18 @@ function InterviewPage() {
                   ) : (
                     /* Q&A View Actions */
                     <>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-8 w-8"
-                          >
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start">
+                      {interviews.length > 0 && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="h-8 w-8"
+                            >
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start">
                           <DropdownMenuItem
                             onClick={() => {
                               if (!questionData) return
@@ -2099,18 +2117,21 @@ function InterviewPage() {
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => setIsHistoryPanelOpen(!isHistoryPanelOpen)}
-                      >
-                        <History className="h-4 w-4" />
-                      </Button>
+                      )}
+                      {interviews.length > 0 && (
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => setIsHistoryPanelOpen(!isHistoryPanelOpen)}
+                        >
+                          <History className="h-4 w-4" />
+                        </Button>
+                      )}
                       <Button
                         className="h-8 bg-blue-600 hover:bg-blue-700 text-white"
                         onClick={() => setShowQuestionsDialog(true)}
-                        disabled={isPolling}
+                        disabled={isPolling || interviews.length === 0}
                       >
                         {isPolling && job?.type === 'questions_generated' ? (
                           <>
@@ -2124,7 +2145,7 @@ function InterviewPage() {
                       <Button
                         className="h-8 bg-blue-600 hover:bg-blue-700 text-white relative"
                         onClick={() => setShowAnswersDialog(true)}
-                        disabled={isPolling || selectedQuestions.size === 0}
+                        disabled={isPolling || selectedQuestions.size === 0 || interviews.length === 0}
                       >
                         {isPolling && job?.type === 'answers_generated' ? (
                           <>
@@ -2165,7 +2186,7 @@ function InterviewPage() {
                       <h1 className="text-xl font-bold text-left text-gray-900">로딩중...</h1>
                     </div>
                   ) : interviews.length === 0 ? (
-                    <h1 className="text-xl font-bold text-left text-gray-900">면접이 없습니다</h1>
+                    <h1 className="text-xl font-bold text-left text-gray-900">새 면접 생성</h1>
                   ) : (
                     <Select
                       value={selectedInterview?.id || ""}
@@ -2192,7 +2213,22 @@ function InterviewPage() {
 
                 {/* Content that fills exact remaining space Mobile */}
                 <div className="flex-1 overflow-y-scroll p-4">
-                  {loading ? (
+                  {interviews.length === 0 ? (
+                    /* Empty State - No Interviews Mobile */
+                    <div className="flex flex-col items-center justify-center h-full gap-3">
+                      <p className="text-gray-500 text-center text-sm">
+                        아직 생성된 면접이 없습니다.<br />
+                        새 면접을 생성하여 준비를 시작해보세요.
+                      </p>
+                      <Button
+                        variant="outline"
+                        className="h-8 text-sm"
+                        onClick={() => setShowCreateInterviewDialog(true)}
+                      >
+                        새 면접 생성
+                      </Button>
+                    </div>
+                  ) : loading ? (
                     <div className="flex items-center justify-center h-full">
                       <Loader className="h-4 w-4 animate-spin text-black" />
                     </div>

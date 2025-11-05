@@ -84,6 +84,7 @@ export async function signup(formData: FormData) {
 
     if (authError) {
       console.error('Auth signup error:', authError)
+      console.error('Auth error details:', JSON.stringify(authError, null, 2))
 
       // Handle specific error types with Korean messages
       if (authError.status === 504) {
@@ -104,6 +105,13 @@ export async function signup(formData: FormData) {
       }
       if (errorMsg.includes('invalid email')) {
         throw new Error('올바른 이메일 형식이 아닙니다.')
+      }
+      if (errorMsg.includes('database error')) {
+        // In development, show more details
+        if (process.env.NODE_ENV === 'development') {
+          throw new Error(`데이터베이스 오류: ${authError.message}`)
+        }
+        throw new Error('데이터베이스 오류가 발생했습니다. 잠시 후 다시 시도해주세요.')
       }
 
       // Don't expose raw English error messages - use generic Korean message
@@ -136,14 +144,16 @@ export async function signup(formData: FormData) {
 
     const { error: profileError } = await supabase
       .from('profiles')
-      .insert([{
+      .upsert([{
         id: authData.user.id,
         name: name,
         referral_code: newUserReferralCode,
         referred_by: referrerId,
         signup_platform: signupPlatform,
         signup_platform_detail: signupPlatform === 'other' ? signupPlatformDetail : null
-      }])
+      }], {
+        onConflict: 'id'
+      })
 
     if (profileError) {
       console.error('Profile creation failed:', profileError)
