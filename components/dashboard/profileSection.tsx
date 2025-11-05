@@ -115,6 +115,10 @@ export default function ProfileSection({ userName, userEmail, tokens: initialTok
       await signout()
       // The server action will handle the redirect to /auth/signin
     } catch (error) {
+      // Re-throw redirect errors to allow Next.js to handle them
+      if (error instanceof Error && error.message === 'NEXT_REDIRECT') {
+        throw error
+      }
       console.error('Logout error:', error)
       toast.error(error instanceof Error ? error.message : '로그아웃에 실패했습니다')
       setIsLoggingOut(false)
