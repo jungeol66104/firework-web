@@ -182,7 +182,7 @@ export async function deleteUserAccount() {
     // First, get the current user using the regular server client
     const supabase = await createClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
-    
+
     if (authError || !user) {
       throw new Error('User not authenticated')
     }
@@ -190,7 +190,57 @@ export async function deleteUserAccount() {
     // Use admin client for admin operations
     const adminClient = createAdminClient()
 
-    // Delete all user's interviews
+    // Get all user's interview IDs first
+    const { data: userInterviews } = await adminClient
+      .from('interviews')
+      .select('id')
+      .eq('user_id', user.id)
+
+    const interviewIds = userInterviews?.map(i => i.id) || []
+
+    // Delete in proper order to avoid foreign key violations
+
+    // 1. Delete notifications
+    await adminClient
+      .from('notifications')
+      .delete()
+      .eq('user_id', user.id)
+
+    // 2. Delete reports (references interviews)
+    if (interviewIds.length > 0) {
+      await adminClient
+        .from('reports')
+        .delete()
+        .in('interview_id', interviewIds)
+    }
+
+    // 3. Delete interview_qa_jobs (references interviews)
+    if (interviewIds.length > 0) {
+      await adminClient
+        .from('interview_qa_jobs')
+        .delete()
+        .in('interview_id', interviewIds)
+    }
+
+    // 4. Delete generation_jobs if it exists (old table name)
+    if (interviewIds.length > 0) {
+      await adminClient
+        .from('generation_jobs')
+        .delete()
+        .in('interview_id', interviewIds)
+        .then(() => {})
+        .catch(() => {}) // Ignore if table doesn't exist
+    }
+
+    // 5. Delete interview_qas (references interviews)
+    if (interviewIds.length > 0) {
+      await adminClient
+        .from('interview_qas')
+        .delete()
+        .in('interview_id', interviewIds)
+    }
+
+    // 6. Now delete all user's interviews
     const { error: interviewsError } = await adminClient
       .from('interviews')
       .delete()
@@ -200,7 +250,13 @@ export async function deleteUserAccount() {
       throw new Error(`Failed to delete user interviews: ${interviewsError.message}`)
     }
 
-    // Delete the user's profile
+    // 7. Delete payments
+    await adminClient
+      .from('payments')
+      .delete()
+      .eq('user_id', user.id)
+
+    // 8. Delete the user's profile
     const { error: profileError } = await adminClient
       .from('profiles')
       .delete()
@@ -210,7 +266,7 @@ export async function deleteUserAccount() {
       throw new Error(`Failed to delete user profile: ${profileError.message}`)
     }
 
-    // Delete the user account from auth (requires admin privileges)
+    // 9. Delete the user account from auth (requires admin privileges)
     const { error: deleteError } = await adminClient.auth.admin.deleteUser(user.id)
 
     if (deleteError) {
@@ -221,9 +277,9 @@ export async function deleteUserAccount() {
     return { success: true, message: 'Account deleted successfully' }
   } catch (error) {
     console.error('Account deletion error:', error)
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Failed to delete account' 
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to delete account'
     }
   }
 }

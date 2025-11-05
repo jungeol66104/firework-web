@@ -166,6 +166,11 @@ export default function ReportsSection() {
     )
   }
 
+  // Hide the entire section if there are no reports
+  if (!isLoading && !error && reports.length === 0) {
+    return null
+  }
+
   return (
     <div id="reports" className="w-full max-w-4xl p-4">
       <div className="flex justify-between items-center mb-4">
@@ -180,12 +185,6 @@ export default function ReportsSection() {
         <Card>
           <CardContent className="pt-6">
             <p className="text-center text-red-500">{error}</p>
-          </CardContent>
-        </Card>
-      ) : reports.length === 0 ? (
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-center text-gray-500">이의신청 내역이 없습니다.</p>
           </CardContent>
         </Card>
       ) : (
