@@ -1,11 +1,22 @@
 'use client'
 
+import { useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { AlertCircle } from 'lucide-react'
-import Link from 'next/link'
 
-export default function ErrorPage() {
+export default function Error({
+  error,
+  reset,
+}: {
+  error: Error & { digest?: string }
+  reset: () => void
+}) {
+  useEffect(() => {
+    // Log the error to an error reporting service
+    console.error('Error boundary caught:', error)
+  }, [error])
+
   return (
     <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
       <div className="w-full max-w-md">
@@ -21,14 +32,18 @@ export default function ErrorPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-gray-600">
-              문제가 지속되면 고객 지원팀에 문의해주세요.
+              일시적인 문제일 수 있습니다. 다시 시도해주세요.
             </p>
             <div className="flex flex-col gap-2">
+              <Button onClick={reset} className="w-full">
+                다시 시도
+              </Button>
               <Button
-                asChild
+                variant="outline"
+                onClick={() => window.location.href = '/'}
                 className="w-full"
               >
-                <Link href="/">홈으로 돌아가기</Link>
+                홈으로 돌아가기
               </Button>
             </div>
           </CardContent>
