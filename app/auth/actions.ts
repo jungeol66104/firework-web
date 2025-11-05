@@ -224,12 +224,15 @@ export async function deleteUserAccount() {
 
     // 4. Delete generation_jobs if it exists (old table name)
     if (interviewIds.length > 0) {
-      await adminClient
-        .from('generation_jobs')
-        .delete()
-        .in('interview_id', interviewIds)
-        .then(() => {})
-        .catch(() => {}) // Ignore if table doesn't exist
+      try {
+        await adminClient
+          .from('generation_jobs')
+          .delete()
+          .in('interview_id', interviewIds)
+      } catch (error) {
+        // Ignore if table doesn't exist
+        console.log('generation_jobs table not found (legacy table)')
+      }
     }
 
     // 5. Delete interview_qas (references interviews)
