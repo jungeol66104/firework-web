@@ -24,21 +24,23 @@ export class QueueManager {
     // Force production domain for QStash webhooks instead of preview URLs
     const vercelUrl = process.env.VERCEL_URL
     const appUrl = process.env.NEXT_PUBLIC_APP_URL
-    
+
     // Use production domain or fallback to NEXT_PUBLIC_APP_URL or localhost
-    const baseUrl = appUrl || 
-      (vercelUrl && !vercelUrl.includes('jungeol66104s-projects') 
+    const baseUrl = appUrl ||
+      (vercelUrl && !vercelUrl.includes('jungeol66104s-projects')
         ? (vercelUrl.startsWith('http') ? vercelUrl : `https://${vercelUrl}`)
         : 'http://localhost:3000')
-    
-    const endpoint = `${baseUrl}/api/process/${type}`
-    
+
+    // Map to consistent endpoint names: questions-generated, answers-generated
+    const endpointPath = type === 'question' ? 'questions-generated' : 'answers-generated'
+    const endpoint = `${baseUrl}/api/process/${endpointPath}`
+
     console.log('=== QStash Endpoint Generation Debug ===')
     console.log('- VERCEL_URL:', vercelUrl)
     console.log('- NEXT_PUBLIC_APP_URL:', appUrl)
     console.log('- Generated baseUrl:', baseUrl)
     console.log('- Final endpoint:', endpoint)
-    
+
     return endpoint
   }
 

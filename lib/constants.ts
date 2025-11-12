@@ -4,8 +4,8 @@
 export const NOTIFICATION_MESSAGES = {
   questions_generated: (companyName: string) =>
     `${companyName} 면접의 질문 30개가 생성되었습니다.`,
-  answers_generated: (companyName: string) =>
-    `${companyName} 면접의 답변 30개가 생성되었습니다.`,
+  answers_generated: (companyName: string, count: number) =>
+    `${companyName} 면접의 답변 ${count}개가 생성되었습니다.`,
   question_regenerated: (companyName: string, index: number) =>
     `${companyName} 면접의 질문 ${index + 1}번이 재생성되었습니다.`,
   answer_regenerated: (companyName: string, index: number) =>

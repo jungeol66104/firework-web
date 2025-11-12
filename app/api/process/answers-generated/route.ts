@@ -243,7 +243,7 @@ async function handler(request: NextRequest) {
         await createNotification(supabase, {
           user_id: userId,
           type: 'answers_generated',
-          message: NOTIFICATION_MESSAGES.answers_generated(interview.company_name || '회사'),
+          message: NOTIFICATION_MESSAGES.answers_generated(interview.company_name || '회사', selectedQuestions.length),
           interview_id: interviewId,
           interview_qas_id: savedQA.id,
           metadata: {

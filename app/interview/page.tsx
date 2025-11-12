@@ -112,37 +112,8 @@ const formatQuestionDataAsHTML = (
                           {hasQuestionContent ? q : '(질문 없음)'}
                         </span>
                       )}
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 w-6 p-0 flex-shrink-0 text-gray-300 group-hover:text-black hover:bg-transparent"
-                          >
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            className="cursor-pointer"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              onEditQA?.('question', 'general_personality', i, q)
-                            }}
-                          >
-                            수정
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            className="cursor-pointer"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              onRegenerateQA?.('question', 'general_personality', i, q)
-                            }}
-                          >
-                            재생성
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      {/* Invisible placeholder to maintain layout spacing */}
+                      <div className="h-6 w-6 flex-shrink-0" />
                     </div>
                   </div>
                   {showEditDropdown === questionId && (
@@ -289,37 +260,8 @@ const formatQuestionDataAsHTML = (
                           {hasQuestionContent ? q : '(질문 없음)'}
                         </span>
                       )}
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 w-6 p-0 flex-shrink-0 text-gray-300 group-hover:text-black hover:bg-transparent"
-                          >
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            className="cursor-pointer"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              onEditQA?.('question', 'cover_letter_personality', i, q)
-                            }}
-                          >
-                            수정
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            className="cursor-pointer"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              onRegenerateQA?.('question', 'cover_letter_personality', i, q)
-                            }}
-                          >
-                            재생성
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      {/* Invisible placeholder to maintain layout spacing */}
+                      <div className="h-6 w-6 flex-shrink-0" />
                     </div>
                   </div>
                   {showEditDropdown === questionId && (
@@ -466,37 +408,8 @@ const formatQuestionDataAsHTML = (
                           {hasQuestionContent ? q : '(질문 없음)'}
                         </span>
                       )}
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 w-6 p-0 flex-shrink-0 text-gray-300 group-hover:text-black hover:bg-transparent"
-                          >
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            className="cursor-pointer"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              onEditQA?.('question', 'cover_letter_competency', i, q)
-                            }}
-                          >
-                            수정
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            className="cursor-pointer"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              onRegenerateQA?.('question', 'cover_letter_competency', i, q)
-                            }}
-                          >
-                            재생성
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      {/* Invisible placeholder to maintain layout spacing */}
+                      <div className="h-6 w-6 flex-shrink-0" />
                     </div>
                   </div>
                   {showEditDropdown === questionId && (
