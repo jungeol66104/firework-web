@@ -21,7 +21,7 @@ export default async function AdminUserDetailPage({ params }: PageProps) {
 
   return (
     <div className="flex justify-center">
-      <div className="w-full max-w-4xl p-8">
+      <div className="w-full max-w-4xl">
         <UserEditForm user={user} />
       </div>
     </div>

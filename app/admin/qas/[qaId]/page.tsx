@@ -31,7 +31,7 @@ export default async function AdminQADetailPage({ params }: PageProps) {
 
   return (
     <div className="flex justify-center">
-      <div className="w-full max-w-4xl p-8">
+      <div className="w-full max-w-4xl">
         <QAEditForm qa={qa} interview={interview} />
       </div>
     </div>

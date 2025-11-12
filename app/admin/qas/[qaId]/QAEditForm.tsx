@@ -218,7 +218,7 @@ export function QAEditForm({ qa, interview }: QAEditFormProps) {
             <p className="text-gray-900 text-sm mt-1">{new Date(qa.created_at).toLocaleDateString('ko-KR')}</p>
           </div>
 
-          <div className="sticky bottom-0 bg-white/40 backdrop-blur-sm px-4 sm:px-8 py-3 mt-6 -mx-4 sm:-mx-8">
+          <div className="sticky bottom-0 bg-white/40 backdrop-blur-sm px-4 sm:px-8 py-3 mt-6">
             <div className="flex justify-between items-center">
               <div></div>
               <div className="flex gap-3">

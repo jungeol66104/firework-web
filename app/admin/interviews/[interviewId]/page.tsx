@@ -29,7 +29,7 @@ export default async function AdminInterviewDetailPage({ params }: PageProps) {
 
   return (
     <div className="flex justify-center">
-      <div className="w-full max-w-4xl p-8">
+      <div className="w-full max-w-4xl">
         <InterviewEditForm interview={interview} user={user} />
       </div>
     </div>

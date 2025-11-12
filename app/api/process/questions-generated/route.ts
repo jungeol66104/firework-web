@@ -5,7 +5,7 @@ import { fetchInterviewByIdServer } from '@/lib/supabase/services/serverServices
 import { checkTokenBalance, spendTokens, refundTokens } from '@/lib/supabase/services/tokenService'
 import { createNotification } from '@/lib/supabase/services/notificationService'
 import { NOTIFICATION_MESSAGES } from '@/lib/constants'
-import { GoogleGenAI, Type } from "@google/genai"
+import { generateWithGemini } from '@/lib/gemini/client'
 
 async function handler(request: NextRequest) {
   try {
@@ -116,7 +116,7 @@ async function handler(request: NextRequest) {
       console.log('Generated prompt for job', jobId, 'length:', prompt.length)
 
       // STEP 3: Generate with Gemini (user already paid)
-      const question = await generateQuestionWithGemini(prompt)
+      const question = await generateWithGemini(prompt, 'questions_bulk')
       console.log('Generated question for job', jobId, 'length:', question.length)
 
       // Parse and validate JSON response
@@ -176,6 +176,9 @@ async function handler(request: NextRequest) {
         .eq('interview_id', interviewId)
         .eq('is_default', true)
 
+      // Store parent QA ID if there's a previous version
+      const parentQaId = existingQAs && existingQAs.length > 0 ? existingQAs[0].id : null
+
       // If exists, set it to non-default
       if (existingQAs && existingQAs.length > 0) {
         await supabase
@@ -193,6 +196,16 @@ async function handler(request: NextRequest) {
         cover_letter_competency: Array(10).fill(null)
       }
 
+      // Build target_items - all 30 questions were generated
+      const targetItems = {
+        questions: [
+          ...Array.from({ length: 10 }, (_, i) => ({ category: 'general_personality' as const, index: i })),
+          ...Array.from({ length: 10 }, (_, i) => ({ category: 'cover_letter_personality' as const, index: i })),
+          ...Array.from({ length: 10 }, (_, i) => ({ category: 'cover_letter_competency' as const, index: i }))
+        ],
+        answers: []
+      }
+
       const { data: savedQA, error: saveError } = await supabase
         .from('interview_qas')
         .insert({
@@ -201,7 +214,10 @@ async function handler(request: NextRequest) {
           questions_data: questionData,
           answers_data: emptyAnswers,
           is_default: true,
-          type: 'questions_generated'
+          type: 'questions_generated',
+          parent_qa_id: parentQaId,
+          target_items: targetItems,
+          tokens_used: 3
         })
         .select()
         .single()
@@ -405,90 +421,6 @@ ${comment || '없음'}`
 
     return prompt
   }
-}
-
-async function generateQuestionWithGemini(prompt: string): Promise<string> {
-  const geminiApiKey = process.env.GEMINI_API_KEY
-  
-  if (!geminiApiKey) {
-    throw new Error('GEMINI_API_KEY is not configured')
-  }
-
-  console.log('Using Gemini API key:', geminiApiKey.substring(0, 10) + '...')
-  console.log('Prompt length:', prompt.length)
-
-  const ai = new GoogleGenAI({ apiKey: geminiApiKey })
-
-  const modelsToTry = [
-    { name: 'gemini-2.5-pro', description: 'Gemini 2.5 Pro' },
-    { name: 'gemini-2.5-pro-001', description: 'Gemini 2.5 Pro (stable)' },
-    { name: 'gemini-2.5-flash', description: 'Gemini 2.5 Flash (fallback)' }
-  ]
-
-  for (const model of modelsToTry) {
-    try {
-      console.log(`Attempting to call Gemini API with model: ${model.name}`)
-      
-      const responseSchema = {
-        type: Type.OBJECT,
-        properties: {
-          general_personality: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING },
-            minItems: 10,
-            maxItems: 10
-          },
-          cover_letter_personality: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING },
-            minItems: 10,
-            maxItems: 10
-          },
-          cover_letter_competency: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING },
-            minItems: 10,
-            maxItems: 10
-          }
-        },
-        required: ["general_personality", "cover_letter_personality", "cover_letter_competency"]
-      }
-      
-      const response = await ai.models.generateContent({
-        model: model.name,
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: responseSchema
-        }
-      })
-      
-      const responseText = response.text
-      console.log('Gemini API response received, length:', responseText?.length || 0)
-      
-      if (!responseText) {
-        throw new Error('Empty response from Gemini API')
-      }
-      
-      console.log(`✅ Successfully used ${model.name}`)
-      return responseText
-      
-    } catch (error) {
-      console.error(`❌ Failed with ${model.name}:`, error instanceof Error ? error.message : 'Unknown error')
-      
-      if (error instanceof Error && error.message.includes('API key not valid')) {
-        throw new Error('Invalid Gemini API key')
-      }
-      
-      if (model === modelsToTry[modelsToTry.length - 1]) {
-        throw new Error(`All models failed. Last error: ${error instanceof Error ? error.message : 'Unknown error'}`)
-      }
-      
-      continue
-    }
-  }
-  
-  throw new Error('No models available')
 }
 
 // Signature verification enabled - QStash will verify requests using signing keys

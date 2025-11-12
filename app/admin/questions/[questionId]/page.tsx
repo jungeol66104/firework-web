@@ -42,7 +42,7 @@ export default async function AdminQuestionDetailPage({ params }: PageProps) {
 
   return (
     <div className="flex justify-center">
-      <div className="w-full max-w-4xl p-8">
+      <div className="w-full max-w-4xl">
         <QuestionEditForm question={question} />
       </div>
     </div>

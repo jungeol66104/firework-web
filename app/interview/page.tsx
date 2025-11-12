@@ -620,6 +620,9 @@ function InterviewPage() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [deleteConfirmText, setDeleteConfirmText] = useState("")
   const [isDeletingInterview, setIsDeletingInterview] = useState(false)
+  const [showRenameDialog, setShowRenameDialog] = useState(false)
+  const [renameQaId, setRenameQaId] = useState<string | null>(null)
+  const [renameText, setRenameText] = useState("")
 
   // Form for basic info
   const form = useForm<InfoFormData>({
@@ -1137,6 +1140,10 @@ function InterviewPage() {
   // Fetch questions and answers when selected interview changes
   useEffect(() => {
     if (selectedInterview?.id) {
+      // Reset history selection state when changing interviews
+      setSelectedHistoryId(null)
+      setViewingQaId(null)
+
       fetchInterviewData()
       fetchHistory()
     }
@@ -1399,6 +1406,15 @@ function InterviewPage() {
         const { history } = await response.json()
         console.log('fetchHistory data:', history)
         setQaHistory(history || [])
+
+        // If no version is currently selected and we're not viewing a specific version,
+        // automatically select the default version in the history
+        if (!selectedHistoryId && !viewingQaId && history && history.length > 0) {
+          const defaultVersion = history.find((qa: any) => qa.is_default)
+          if (defaultVersion) {
+            setSelectedHistoryId(defaultVersion.id)
+          }
+        }
       } else {
         console.error('fetchHistory failed:', response.status, await response.text())
       }
@@ -1439,13 +1455,36 @@ function InterviewPage() {
 
       if (response.ok) {
         toast.success('기본 버전으로 설정되었습니다')
-        setViewingQaId(null)
+        // Only refresh history to update the "기본" label, don't reload Q&A data
         fetchHistory()
-        fetchInterviewData()
       }
     } catch (error) {
       console.error('Error setting default:', error)
       toast.error('기본 버전 설정에 실패했습니다')
+    }
+  }
+
+  // Rename QA version
+  const renameQaVersion = async () => {
+    if (!selectedInterview?.id || !renameQaId || !renameText.trim()) return
+
+    try {
+      const response = await fetch(`/api/interviews/${selectedInterview.id}/qas/${renameQaId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: renameText.trim() })
+      })
+
+      if (response.ok) {
+        toast.success('이름이 변경되었습니다')
+        setShowRenameDialog(false)
+        setRenameQaId(null)
+        setRenameText("")
+        fetchHistory()
+      }
+    } catch (error) {
+      console.error('Error renaming:', error)
+      toast.error('이름 변경에 실패했습니다')
     }
   }
 
@@ -1814,7 +1853,8 @@ function InterviewPage() {
                                                    qa.type === 'question_regenerated' ? '질문 재생성' :
                                                    qa.type === 'answer_regenerated' ? '답변 재생성' :
                                                    qa.type === 'question_edited' ? '질문 수정' :
-                                                   qa.type === 'answer_edited' ? '답변 수정' : qa.type
+                                                   qa.type === 'answer_edited' ? '답변 수정' :
+                                                   qa.type === 'admin_edited' ? '관리자 수정' : qa.type
 
                                   const date = new Date(qa.created_at)
                                   const formattedDate = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`
@@ -1824,7 +1864,7 @@ function InterviewPage() {
                                     <TableRow
                                       key={qa.id}
                                       className={`cursor-pointer transition-colors ${
-                                        selectedHistoryId === qa.id ? 'bg-blue-50' : 'hover:bg-gray-50'
+                                        selectedHistoryId === qa.id ? 'bg-gray-100' : 'hover:bg-gray-50'
                                       } ${isLastItem ? '[&>td]:border-b' : ''}`}
                                       onClick={() => loadQaVersion(qa.id)}
                                     >
@@ -1865,8 +1905,9 @@ function InterviewPage() {
                                               className="cursor-pointer"
                                               onClick={(e) => {
                                                 e.stopPropagation()
-                                                // TODO: Implement rename
-                                                toast.info('이름 변경 기능은 준비 중입니다')
+                                                setRenameQaId(qa.id)
+                                                setRenameText(qa.name)
+                                                setShowRenameDialog(true)
                                               }}
                                             >
                                               이름 변경
@@ -2426,6 +2467,47 @@ function InterviewPage() {
               disabled={isDeletingInterview || deleteConfirmText !== '삭제'}
             >
               {isDeletingInterview ? "삭제 중..." : "삭제"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rename QA Version Dialog */}
+      <Dialog open={showRenameDialog} onOpenChange={(open) => {
+        setShowRenameDialog(open)
+        if (!open) {
+          setRenameQaId(null)
+          setRenameText("")
+        }
+      }}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>이름 변경</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <Input
+              value={renameText}
+              onChange={(e) => setRenameText(e.target.value)}
+              placeholder="새 이름을 입력하세요"
+              autoComplete="off"
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowRenameDialog(false)
+                setRenameQaId(null)
+                setRenameText("")
+              }}
+            >
+              취소
+            </Button>
+            <Button
+              onClick={renameQaVersion}
+              disabled={!renameText.trim()}
+            >
+              저장
             </Button>
           </DialogFooter>
         </DialogContent>

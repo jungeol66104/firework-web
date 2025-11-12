@@ -29,7 +29,7 @@ export default function AdminInterviewsPage() {
     userName: 100,
     userId: 120,
     created: 120,
-    actions: 100,
+    actions: 170,
   });
 
   const resizingColumn = useRef<string | null>(null);
@@ -109,6 +109,11 @@ export default function AdminInterviewsPage() {
   const handleQAsClick = (e: React.MouseEvent, interviewId: string) => {
     e.stopPropagation();
     router.push(`/admin/qas?interview_id=${interviewId}`);
+  };
+
+  const handleCreateVersion = (e: React.MouseEvent, interviewId: string) => {
+    e.stopPropagation();
+    router.push(`/admin/interviews/${interviewId}/version`);
   };
 
   // Filter data by company search
@@ -277,12 +282,20 @@ export default function AdminInterviewsPage() {
                       {new Date(interview.created_at).toLocaleDateString('ko-KR')}
                     </td>
                     <td className="px-3 py-2 text-xs" style={{ width: columnWidths.actions, minWidth: columnWidths.actions }}>
-                      <button
-                        onClick={(e) => handleQAsClick(e, interview.id)}
-                        className="px-2 py-1 text-xs border hover:bg-gray-50 cursor-pointer"
-                      >
-                        질의응답
-                      </button>
+                      <div className="flex gap-1">
+                        <button
+                          onClick={(e) => handleQAsClick(e, interview.id)}
+                          className="px-2 py-1 text-xs border hover:bg-gray-50 cursor-pointer whitespace-nowrap"
+                        >
+                          질의응답
+                        </button>
+                        <button
+                          onClick={(e) => handleCreateVersion(e, interview.id)}
+                          className="px-2 py-1 text-xs border hover:bg-gray-50 cursor-pointer whitespace-nowrap"
+                        >
+                          새 버전
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

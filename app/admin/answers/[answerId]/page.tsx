@@ -42,7 +42,7 @@ export default async function AdminAnswerDetailPage({ params }: PageProps) {
 
   return (
     <div className="flex justify-center">
-      <div className="w-full max-w-4xl p-8">
+      <div className="w-full max-w-4xl">
         <AnswerEditForm answer={answer} />
       </div>
     </div>

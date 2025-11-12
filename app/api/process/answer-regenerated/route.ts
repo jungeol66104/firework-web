@@ -5,7 +5,7 @@ import { fetchInterviewByIdServer } from '@/lib/supabase/services/serverServices
 import { checkTokenBalance, spendTokens, refundTokens } from '@/lib/supabase/services/tokenService'
 import { createNotification } from '@/lib/supabase/services/notificationService'
 import { NOTIFICATION_MESSAGES } from '@/lib/constants'
-import { GoogleGenAI, Type } from "@google/genai"
+import { generateWithGemini } from '@/lib/gemini/client'
 
 async function handler(request: NextRequest) {
   try {
@@ -112,7 +112,7 @@ async function handler(request: NextRequest) {
       console.log('Generated regenerate prompt for job', jobId, 'length:', prompt.length)
 
       // STEP 4: Generate with Gemini (user already paid)
-      const regeneratedAnswer = await generateAnswerWithGemini(prompt)
+      const regeneratedAnswer = await generateWithGemini(prompt, 'answer')
       console.log('Generated regenerated answer for job', jobId, 'length:', regeneratedAnswer.length)
 
       // Parse and validate JSON response
@@ -165,12 +165,25 @@ async function handler(request: NextRequest) {
 
       console.log('Updated answer for job', jobId)
 
-      // Unset current default
+      // Unset current default and get its ID for parent reference
+      const { data: currentDefault } = await supabase
+        .from('interview_qas')
+        .select('id')
+        .eq('interview_id', interviewId)
+        .eq('is_default', true)
+        .single()
+
       await supabase
         .from('interview_qas')
         .update({ is_default: false })
         .eq('interview_id', interviewId)
         .eq('is_default', true)
+
+      // Build target_items - one answer was regenerated
+      const target_items = {
+        questions: [],
+        answers: [{ category, index }]
+      }
 
       // Create new QA record with regenerated answer as new default
       const { data: savedQA, error: saveError } = await supabase
@@ -181,7 +194,10 @@ async function handler(request: NextRequest) {
           questions_data: qa.questions_data, // Preserve existing questions
           answers_data: updatedAnswerData,
           is_default: true,
-          type: 'answer_regenerated'
+          type: 'answer_regenerated',
+          parent_qa_id: currentDefault?.id || null,
+          target_items,
+          tokens_used: 0.2
         })
         .select()
         .single()
@@ -317,75 +333,6 @@ ${comment || '기존 답변과 다른 관점이나 다른 경험을 활용하여
 새로운 답변 1개만 생성해주세요.`
 
   return prompt
-}
-
-async function generateAnswerWithGemini(prompt: string): Promise<string> {
-  const geminiApiKey = process.env.GEMINI_API_KEY
-
-  if (!geminiApiKey) {
-    throw new Error('GEMINI_API_KEY is not configured')
-  }
-
-  console.log('Using Gemini API key:', geminiApiKey.substring(0, 10) + '...')
-  console.log('Regenerate prompt length:', prompt.length)
-
-  const ai = new GoogleGenAI({ apiKey: geminiApiKey })
-
-  const modelsToTry = [
-    { name: 'gemini-2.5-pro', description: 'Gemini 2.5 Pro' },
-    { name: 'gemini-2.5-pro-001', description: 'Gemini 2.5 Pro (stable)' },
-    { name: 'gemini-2.5-flash', description: 'Gemini 2.5 Flash (fallback)' }
-  ]
-
-  for (const model of modelsToTry) {
-    try {
-      console.log(`Attempting to call Gemini API with model: ${model.name}`)
-
-      const responseSchema = {
-        type: Type.OBJECT,
-        properties: {
-          answer: {
-            type: Type.STRING
-          }
-        },
-        required: ["answer"]
-      }
-
-      const response = await ai.models.generateContent({
-        model: model.name,
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: responseSchema
-        }
-      })
-
-      const responseText = response.text
-      console.log('Gemini API response received, length:', responseText?.length || 0)
-
-      if (!responseText) {
-        throw new Error('Empty response from Gemini API')
-      }
-
-      console.log(`✅ Successfully used ${model.name}`)
-      return responseText
-
-    } catch (error) {
-      console.error(`❌ Failed with ${model.name}:`, error instanceof Error ? error.message : 'Unknown error')
-
-      if (error instanceof Error && error.message.includes('API key not valid')) {
-        throw new Error('Invalid Gemini API key')
-      }
-
-      if (model === modelsToTry[modelsToTry.length - 1]) {
-        throw new Error(`All models failed. Last error: ${error instanceof Error ? error.message : 'Unknown error'}`)
-      }
-
-      continue
-    }
-  }
-
-  throw new Error('No models available')
 }
 
 // Signature verification enabled - QStash will verify requests using signing keys

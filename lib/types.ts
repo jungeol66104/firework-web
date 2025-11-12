@@ -33,6 +33,17 @@ export type ChangeType =
   | 'question_edited'          // Edit a question by comment
   | 'answer_regenerated'       // Regenerate an answer
   | 'answer_edited'            // Edit an answer by comment
+  | 'admin_edited'             // Admin manual edit (관리자 수정)
+
+export interface TargetItem {
+  category: 'general_personality' | 'cover_letter_personality' | 'cover_letter_competency'
+  index: number
+}
+
+export interface TargetItems {
+  questions: TargetItem[]
+  answers: TargetItem[]
+}
 
 export interface InterviewQA {
   id: string
@@ -43,6 +54,9 @@ export interface InterviewQA {
   is_default: boolean
   type: ChangeType
   created_at: string
+  parent_qa_id?: string | null
+  target_items?: TargetItems
+  tokens_used?: number
 }
 
 export interface InterviewQAJob {
@@ -186,6 +200,8 @@ export interface NotificationMetadata {
   tokens?: number
   refund_count?: number
   company_name?: string
+  selected_count?: number
+  generated_count?: number
 }
 
 export interface Notification {

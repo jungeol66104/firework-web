@@ -5,7 +5,7 @@ import { fetchInterviewByIdServer, fetchInterviewQuestionsServer } from '@/lib/s
 import { checkTokenBalance, spendTokens, refundTokens } from '@/lib/supabase/services/tokenService'
 import { createNotification } from '@/lib/supabase/services/notificationService'
 import { NOTIFICATION_MESSAGES } from '@/lib/constants'
-import { GoogleGenAI, Type } from "@google/genai"
+import { generateWithGemini } from '@/lib/gemini/client'
 
 async function handler(request: NextRequest) {
   try {
@@ -44,8 +44,8 @@ async function handler(request: NextRequest) {
         return NextResponse.json({ error: 'No questions selected' }, { status: 400 })
       }
 
-      // Calculate token cost
-      tokenCost = (selectedQuestions.length / 30) * 6
+      // Calculate token cost (round to 1 decimal to avoid floating point errors)
+      tokenCost = Math.round((selectedQuestions.length / 30) * 6 * 10) / 10
       console.log(`Token cost for ${selectedQuestions.length} questions: ${tokenCost} tokens`)
 
       // STEP 2: Check token balance BEFORE any work
@@ -113,7 +113,7 @@ async function handler(request: NextRequest) {
       console.log('Generated answer prompt for job', jobId, 'length:', prompt.length)
 
       // STEP 4: Generate with Gemini (user already paid)
-      const answer = await generateAnswerWithGemini(prompt)
+      const answer = await generateWithGemini(prompt, 'answers')
       console.log('Generated answer for job', jobId, 'length:', answer.length)
 
       // Parse and validate JSON response
@@ -189,12 +189,28 @@ async function handler(request: NextRequest) {
       console.log('Merged answers for job', jobId)
 
       // Update the QA record with answers
-      // Set current default to non-default
+      // Set current default to non-default and get its ID for parent reference
+      const { data: currentDefault } = await supabase
+        .from('interview_qas')
+        .select('id')
+        .eq('interview_id', interviewId)
+        .eq('is_default', true)
+        .single()
+
       await supabase
         .from('interview_qas')
         .update({ is_default: false })
         .eq('interview_id', interviewId)
         .eq('is_default', true)
+
+      // Build target_items from the LLM answers
+      const targetItems = {
+        questions: [],
+        answers: llmAnswers.answers.map((ans: any) => ({
+          category: ans.category,
+          index: ans.index
+        }))
+      }
 
       // Create new QA record with both questions and answers as new default
       const { data: savedQA, error: saveError } = await supabase
@@ -205,7 +221,10 @@ async function handler(request: NextRequest) {
           questions_data: qa.questions_data,
           answers_data: answerData,
           is_default: true,
-          type: 'answers_generated'
+          type: 'answers_generated',
+          parent_qa_id: currentDefault?.id || null,
+          target_items: targetItems,
+          tokens_used: tokenCost
         })
         .select()
         .single()
@@ -240,6 +259,11 @@ async function handler(request: NextRequest) {
 
       // Create notification for user
       try {
+        console.log('=== Notification Debug ===')
+        console.log('selectedQuestions.length:', selectedQuestions.length)
+        console.log('llmAnswers.answers.length:', llmAnswers.answers.length)
+        console.log('Notification message will show:', selectedQuestions.length, 'answers')
+
         await createNotification(supabase, {
           user_id: userId,
           type: 'answers_generated',
@@ -247,7 +271,9 @@ async function handler(request: NextRequest) {
           interview_id: interviewId,
           interview_qas_id: savedQA.id,
           metadata: {
-            company_name: interview.company_name
+            company_name: interview.company_name,
+            selected_count: selectedQuestions.length,
+            generated_count: llmAnswers.answers.length
           }
         })
         console.log('Notification created for job:', jobId)
@@ -356,91 +382,6 @@ ${comment || '없음'}
 각 답변의 category와 index는 질문 목록에 명시된 값을 그대로 사용하세요.`
 
   return prompt
-}
-
-async function generateAnswerWithGemini(prompt: string): Promise<string> {
-  const geminiApiKey = process.env.GEMINI_API_KEY
-  
-  if (!geminiApiKey) {
-    throw new Error('GEMINI_API_KEY is not configured')
-  }
-
-  console.log('Using Gemini API key:', geminiApiKey.substring(0, 10) + '...')
-  console.log('Answer prompt length:', prompt.length)
-
-  const ai = new GoogleGenAI({ apiKey: geminiApiKey })
-
-  const modelsToTry = [
-    { name: 'gemini-2.5-pro', description: 'Gemini 2.5 Pro' },
-    { name: 'gemini-2.5-pro-001', description: 'Gemini 2.5 Pro (stable)' },
-    { name: 'gemini-2.5-flash', description: 'Gemini 2.5 Flash (fallback)' }
-  ]
-
-  for (const model of modelsToTry) {
-    try {
-      console.log(`Attempting to call Gemini API with model: ${model.name}`)
-      
-      const responseSchema = {
-        type: Type.OBJECT,
-        properties: {
-          answers: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                category: {
-                  type: Type.STRING,
-                  enum: ["general_personality", "cover_letter_personality", "cover_letter_competency"]
-                },
-                index: {
-                  type: Type.NUMBER
-                },
-                answer: {
-                  type: Type.STRING
-                }
-              },
-              required: ["category", "index", "answer"]
-            }
-          }
-        },
-        required: ["answers"]
-      }
-      
-      const response = await ai.models.generateContent({
-        model: model.name,
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: responseSchema
-        }
-      })
-      
-      const responseText = response.text
-      console.log('Gemini API response received, length:', responseText?.length || 0)
-      
-      if (!responseText) {
-        throw new Error('Empty response from Gemini API')
-      }
-      
-      console.log(`✅ Successfully used ${model.name}`)
-      return responseText
-      
-    } catch (error) {
-      console.error(`❌ Failed with ${model.name}:`, error instanceof Error ? error.message : 'Unknown error')
-      
-      if (error instanceof Error && error.message.includes('API key not valid')) {
-        throw new Error('Invalid Gemini API key')
-      }
-      
-      if (model === modelsToTry[modelsToTry.length - 1]) {
-        throw new Error(`All models failed. Last error: ${error instanceof Error ? error.message : 'Unknown error'}`)
-      }
-      
-      continue
-    }
-  }
-  
-  throw new Error('No models available')
 }
 
 // Signature verification enabled - QStash will verify requests using signing keys

@@ -24,7 +24,7 @@ export default async function AdminInterviewPage({ params }: PageProps) {
 
   return (
     <div className="flex justify-center">
-      <div className="w-full max-w-4xl p-8">
+      <div className="w-full max-w-4xl">
         <h1 className="text-2xl font-bold mb-4">면접 상세</h1>
         <div className="bg-white rounded-lg shadow p-6">
           <h2 className="text-xl font-semibold mb-4">면접 정보</h2>

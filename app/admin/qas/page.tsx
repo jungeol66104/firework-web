@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Loader, Search, X, Copy, Filter } from 'lucide-react';
 import { createClient } from '@/lib/supabase/clients/client';
 import { fetchAllQAs } from '@/lib/admin/adminServices';
@@ -15,10 +15,12 @@ interface InterviewQA {
   is_default: boolean;
   type: string;
   created_at: string;
-  // Computed fields (added by useMemo)
-  targetQuestions?: number;
-  targetAnswers?: number;
-  tokensUsed?: number;
+  parent_qa_id?: string | null;
+  target_items?: {
+    questions: Array<{category: string, index: number}>;
+    answers: Array<{category: string, index: number}>;
+  };
+  tokens_used?: number;
 }
 
 export default function AdminQAsPage() {
@@ -92,110 +94,7 @@ export default function AdminQAsPage() {
     }
   };
 
-  // Helper functions for calculations (must be defined before useMemo)
-  const countNonNullAnswers = (answersData: any): number => {
-    if (!answersData) return 0;
-    let count = 0;
-    const categories = ['general_personality', 'cover_letter_personality', 'cover_letter_competency'];
-    for (const category of categories) {
-      const answers = answersData[category] || [];
-      count += answers.filter((a: any) => a !== null).length;
-    }
-    return count;
-  };
-
-  const getQuestionTargetCount = (qa: InterviewQA): number => {
-    if (qa.type === 'questions_generated') return 30;
-    if (qa.type === 'question_regenerated' || qa.type === 'question_edited') return 1;
-    return 0;
-  };
-
-  const getAnswerTargetCount = (qa: InterviewQA, previousQA?: InterviewQA): number => {
-    if (qa.type === 'answer_regenerated' || qa.type === 'answer_edited') {
-      return 1;
-    }
-    if (qa.type !== 'answers_generated') {
-      return 0;
-    }
-
-    // First generation - count all non-null answers
-    if (!previousQA) {
-      return countNonNullAnswers(qa.answers_data);
-    }
-
-    // Subsequent generations - string diff
-    // Compare position by position, only count if current is non-null AND different
-    let diffCount = 0;
-    const categories = ['general_personality', 'cover_letter_personality', 'cover_letter_competency'];
-
-    for (const category of categories) {
-      const prevAnswers = previousQA.answers_data?.[category] || [];
-      const currAnswers = qa.answers_data?.[category] || [];
-      const maxLength = Math.max(prevAnswers.length, currAnswers.length);
-
-      for (let i = 0; i < maxLength; i++) {
-        const prevAnswer = prevAnswers[i];
-        const currAnswer = currAnswers[i];
-        // Only count if current is non-null AND different from previous
-        if (currAnswer !== null && prevAnswer !== currAnswer) {
-          diffCount++;
-        }
-      }
-    }
-
-    return diffCount;
-  };
-
-  const calculateTokens = (targetQuestions: number, targetAnswers: number, type: string): number => {
-    switch(type) {
-      case 'questions_generated':
-        return 3;
-      case 'answers_generated':
-        return Number(((targetAnswers / 30) * 6).toFixed(2));
-      case 'question_regenerated':
-      case 'question_edited':
-        return 0.1;
-      case 'answer_regenerated':
-      case 'answer_edited':
-        return 0.2;
-      default:
-        return 0;
-    }
-  };
-
-  // Pre-calculate metadata for all QAs (runs once when data changes)
-  const qasWithMetadata = useMemo(() => {
-    // Group QAs by interview_id
-    const qasByInterview = new Map<string, InterviewQA[]>();
-    data.forEach(qa => {
-      if (!qa.interview_id) return;
-      const existing = qasByInterview.get(qa.interview_id) || [];
-      qasByInterview.set(qa.interview_id, [...existing, qa]);
-    });
-
-    // Sort each group by created_at descending (newest first)
-    qasByInterview.forEach((qas) => {
-      qas.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    });
-
-    // Calculate metadata for each QA
-    return data.map(qa => {
-      const sameInterviewQAs = qasByInterview.get(qa.interview_id!) || [];
-      const currentIndex = sameInterviewQAs.findIndex(q => q.id === qa.id);
-      const previousQA = sameInterviewQAs[currentIndex + 1];
-
-      const targetQuestions = getQuestionTargetCount(qa);
-      const targetAnswers = getAnswerTargetCount(qa, previousQA);
-      const tokensUsed = calculateTokens(targetQuestions, targetAnswers, qa.type);
-
-      return {
-        ...qa,
-        targetQuestions,
-        targetAnswers,
-        tokensUsed
-      };
-    });
-  }, [data]);
+  // No calculations needed - data comes from DB directly!
 
   const handleCopyId = (id: string) => {
     navigator.clipboard.writeText(id);
@@ -250,7 +149,7 @@ export default function AdminQAsPage() {
   const uniqueTypes = Array.from(new Set(data.map(qa => qa.type).filter(Boolean)));
 
   // Filter data by name search and type
-  const filteredData = qasWithMetadata.filter(qa => {
+  const filteredData = data.filter(qa => {
     // Name search filter
     if (nameSearchInput) {
       const qaName = qa.name?.toLowerCase() || '';
@@ -505,13 +404,13 @@ export default function AdminQAsPage() {
                       {getAnswersCount(qa.answers_data)}
                     </td>
                     <td className="px-3 py-2 text-xs border-r text-center" style={{ width: columnWidths.targetQuestions, minWidth: columnWidths.targetQuestions }}>
-                      {qa.targetQuestions || 0}
+                      {qa.target_items?.questions?.length || 0}
                     </td>
                     <td className="px-3 py-2 text-xs border-r text-center" style={{ width: columnWidths.targetAnswers, minWidth: columnWidths.targetAnswers }}>
-                      {qa.targetAnswers || 0}
+                      {qa.target_items?.answers?.length || 0}
                     </td>
                     <td className="px-3 py-2 text-xs border-r text-center" style={{ width: columnWidths.tokensUsed, minWidth: columnWidths.tokensUsed }}>
-                      {qa.tokensUsed || 0}
+                      {qa.tokens_used != null ? Number(qa.tokens_used).toFixed(1) : '0.0'}
                     </td>
                     <td className="px-3 py-2 text-xs border-r text-center" style={{ width: columnWidths.isDefault, minWidth: columnWidths.isDefault }}>
                       {qa.is_default ? '✓' : '-'}
